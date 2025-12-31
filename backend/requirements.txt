@@ -1,0 +1,10 @@
+Django>=5.0,<6.0
+djangorestframework>=3.14,<4.0
+drf-nested-routers>=0.93,<1.0
+django-cors-headers>=4.3,<5.0
+httpx>=0.27,<1.0
+python-dotenv>=1.0,<2.0
+anthropic>=0.21,<1.0
+mcp>=1.0,<2.0
+aiohttp>=3.9,<4.0
+pydantic>=2.0,<3.0
