@@ -204,7 +204,7 @@ export function BodyEditor({ body, onChange }: BodyEditorProps) {
             }
             className={clsx(
               'w-full h-64 px-4 py-3 bg-sidebar border border-border rounded-lg text-sm font-mono resize-none focus:border-primary-500',
-              body.language === 'json' && body.raw ? 'text-transparent caret-text-primary' : ''
+              body.language === 'json' && body.raw ? 'text-transparent caret-white selection:bg-primary-500/40 selection:text-white' : ''
             )}
           />
           {body.language === 'json' && (
