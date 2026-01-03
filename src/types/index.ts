@@ -309,10 +309,22 @@ export interface AiProvider extends BaseModel {
   name: string
   provider_type: AiProviderType
   api_key: string
+  api_key_masked?: string
   api_base_url?: string
   default_model: string
   is_active: boolean
   max_requests_per_minute: number
+  // GitHub OAuth fields (for Copilot)
+  github_username?: string
+  is_oauth_authenticated?: boolean
+}
+
+export interface GitHubDeviceCodeResponse {
+  device_code: string
+  user_code: string
+  verification_uri: string
+  expires_in: number
+  interval: number
 }
 
 export interface AiConversation extends BaseModel {

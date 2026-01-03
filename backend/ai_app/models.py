@@ -15,11 +15,24 @@ class AiProvider(BaseModel):
 
     name = models.CharField(max_length=255)
     provider_type = models.CharField(max_length=50, choices=ProviderType.choices)
-    api_key = models.CharField(max_length=500)  # Should be encrypted in production
+    api_key = models.CharField(max_length=500, blank=True, default='')  # Manual API key
     api_base_url = models.URLField(blank=True, default='')
     default_model = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
     max_requests_per_minute = models.IntegerField(default=60)
+
+    # GitHub OAuth fields (for Copilot)
+    github_oauth_token = models.CharField(max_length=500, blank=True, default='')
+    github_username = models.CharField(max_length=100, blank=True, default='')
+
+    def get_auth_token(self):
+        """Get the authentication token (OAuth token takes precedence)."""
+        return self.github_oauth_token or self.api_key
+
+    @property
+    def is_oauth_authenticated(self):
+        """Check if provider is authenticated via OAuth."""
+        return bool(self.github_oauth_token)
 
     class Meta:
         ordering = ['name']

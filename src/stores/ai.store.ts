@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import api from '../api/client'
-import { AiProvider, AiConversation } from '../types'
+import { AiProvider, AiConversation, GitHubDeviceCodeResponse } from '../types'
 
 interface AiState {
   // Providers
@@ -16,6 +16,10 @@ interface AiState {
   isLoading: boolean
   error: string | null
 
+  // GitHub OAuth state
+  githubDeviceCode: GitHubDeviceCodeResponse | null
+  githubPolling: boolean
+
   // Actions
   fetchProviders: () => Promise<void>
   createProvider: (provider: Partial<AiProvider>) => Promise<AiProvider>
@@ -23,6 +27,12 @@ interface AiState {
   deleteProvider: (id: string) => Promise<void>
   setActiveProvider: (id: string | null) => void
   testProviderConnection: (id: string) => Promise<boolean>
+
+  // GitHub OAuth actions
+  startGitHubLogin: () => Promise<GitHubDeviceCodeResponse>
+  pollGitHubToken: (deviceCode: string, providerId: string) => Promise<boolean>
+  stopGitHubPolling: () => void
+  logoutGitHub: (providerId: string) => Promise<void>
 
   fetchConversations: () => Promise<void>
   createConversation: (title: string, context?: Record<string, unknown>) => Promise<AiConversation>
@@ -49,6 +59,8 @@ export const useAiStore = create<AiState>((set, get) => ({
   isSidebarOpen: false,
   isLoading: false,
   error: null,
+  githubDeviceCode: null,
+  githubPolling: false,
 
   // Provider actions
   fetchProviders: async () => {
@@ -118,6 +130,67 @@ export const useAiStore = create<AiState>((set, get) => ({
     } catch (error: any) {
       set({ error: error.message, isLoading: false })
       return false
+    }
+  },
+
+  // GitHub OAuth actions
+  startGitHubLogin: async () => {
+    set({ isLoading: true, error: null })
+    try {
+      const response = await api.post('/ai/github/device-code/')
+      const deviceCode = response.data as GitHubDeviceCodeResponse
+      set({ githubDeviceCode: deviceCode, isLoading: false })
+      return deviceCode
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false })
+      throw error
+    }
+  },
+
+  pollGitHubToken: async (deviceCode, providerId) => {
+    set({ githubPolling: true, error: null })
+    try {
+      const response = await api.post('/ai/github/poll-token/', {
+        device_code: deviceCode,
+        provider_id: providerId
+      })
+
+      if (response.data.status === 'success') {
+        // Refresh providers to get updated OAuth status
+        await get().fetchProviders()
+        set({ githubPolling: false, githubDeviceCode: null })
+        return true
+      } else if (response.data.status === 'pending') {
+        // Still waiting for user authorization
+        return false
+      } else {
+        throw new Error(response.data.error_description || 'Authorization failed')
+      }
+    } catch (error: any) {
+      // Don't set error for pending status
+      if (error.response?.data?.error === 'authorization_pending' ||
+          error.response?.data?.error === 'slow_down') {
+        return false
+      }
+      set({ error: error.message, githubPolling: false })
+      throw error
+    }
+  },
+
+  stopGitHubPolling: () => {
+    set({ githubPolling: false, githubDeviceCode: null })
+  },
+
+  logoutGitHub: async (providerId) => {
+    set({ isLoading: true, error: null })
+    try {
+      await api.post('/ai/github/logout/', { provider_id: providerId })
+      // Refresh providers to get updated OAuth status
+      await get().fetchProviders()
+      set({ isLoading: false })
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false })
+      throw error
     }
   },
 

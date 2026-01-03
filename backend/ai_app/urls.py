@@ -7,6 +7,9 @@ from .views import (
     GenerateRequestView,
     AnalyzeResponseView,
     TestProviderConnectionView,
+    GitHubDeviceCodeView,
+    GitHubPollTokenView,
+    GitHubLogoutView,
 )
 
 router = DefaultRouter()
@@ -18,4 +21,7 @@ urlpatterns = [
     path('generate-request/', GenerateRequestView.as_view(), name='ai-generate-request'),
     path('analyze-response/', AnalyzeResponseView.as_view(), name='ai-analyze-response'),
     path('test-connection/', TestProviderConnectionView.as_view(), name='ai-test-connection'),
+    path('github/device-code/', GitHubDeviceCodeView.as_view(), name='github-device-code'),
+    path('github/poll-token/', GitHubPollTokenView.as_view(), name='github-poll-token'),
+    path('github/logout/', GitHubLogoutView.as_view(), name='github-logout'),
 ]

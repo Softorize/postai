@@ -1,10 +1,12 @@
 """AI views."""
 import asyncio
+import httpx
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import StreamingHttpResponse
+from django.conf import settings
 
 from .models import AiProvider, AiConversation, AiMessage
 from .serializers import (
@@ -268,3 +270,157 @@ class TestProviderConnectionView(APIView):
                 'success': False,
                 'message': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GitHubDeviceCodeView(APIView):
+    """Initiate GitHub OAuth device flow."""
+
+    GITHUB_CLIENT_ID = 'Iv1.b507a08c87ecfe98'  # VS Code Copilot client ID
+
+    def post(self, request):
+        """Request device and user codes from GitHub."""
+        try:
+            response = httpx.post(
+                'https://github.com/login/device/code',
+                data={
+                    'client_id': self.GITHUB_CLIENT_ID,
+                    'scope': 'read:user'
+                },
+                headers={'Accept': 'application/json'}
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            return Response({
+                'device_code': data['device_code'],
+                'user_code': data['user_code'],
+                'verification_uri': data['verification_uri'],
+                'expires_in': data['expires_in'],
+                'interval': data['interval']
+            })
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GitHubPollTokenView(APIView):
+    """Poll for GitHub OAuth access token."""
+
+    GITHUB_CLIENT_ID = 'Iv1.b507a08c87ecfe98'  # VS Code Copilot client ID
+
+    def post(self, request):
+        """Poll GitHub for the access token."""
+        device_code = request.data.get('device_code')
+        provider_id = request.data.get('provider_id')
+
+        if not device_code:
+            return Response({
+                'error': 'device_code is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            response = httpx.post(
+                'https://github.com/login/oauth/access_token',
+                data={
+                    'client_id': self.GITHUB_CLIENT_ID,
+                    'device_code': device_code,
+                    'grant_type': 'urn:ietf:params:oauth:grant-type:device_code'
+                },
+                headers={'Accept': 'application/json'}
+            )
+            data = response.json()
+
+            if 'error' in data:
+                # Still waiting for user authorization
+                return Response({
+                    'status': 'pending',
+                    'error': data['error'],
+                    'error_description': data.get('error_description', '')
+                })
+
+            # Got the token!
+            access_token = data['access_token']
+
+            # Get GitHub user info
+            user_response = httpx.get(
+                'https://api.github.com/user',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Accept': 'application/json'
+                }
+            )
+            user_data = user_response.json()
+            github_username = user_data.get('login', '')
+
+            # Get Copilot token using GitHub token
+            copilot_token = self._get_copilot_token(access_token)
+
+            # Update or create provider if provider_id is given
+            if provider_id:
+                try:
+                    provider = AiProvider.objects.get(id=provider_id)
+                    provider.github_oauth_token = copilot_token or access_token
+                    provider.github_username = github_username
+                    provider.is_active = True
+                    provider.save()
+                except AiProvider.DoesNotExist:
+                    pass
+
+            return Response({
+                'status': 'success',
+                'access_token': copilot_token or access_token,
+                'github_username': github_username
+            })
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def _get_copilot_token(self, github_token):
+        """Exchange GitHub token for Copilot API token."""
+        try:
+            response = httpx.get(
+                'https://api.github.com/copilot_internal/v2/token',
+                headers={
+                    'Authorization': f'token {github_token}',
+                    'Accept': 'application/json',
+                    'Editor-Version': 'vscode/1.85.0',
+                    'Editor-Plugin-Version': 'copilot/1.0.0'
+                }
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('token')
+        except:
+            pass
+        return None
+
+
+class GitHubLogoutView(APIView):
+    """Logout from GitHub OAuth."""
+
+    def post(self, request):
+        """Clear GitHub OAuth credentials."""
+        provider_id = request.data.get('provider_id')
+
+        if not provider_id:
+            return Response({
+                'error': 'provider_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            provider = AiProvider.objects.get(id=provider_id)
+            provider.github_oauth_token = ''
+            provider.github_username = ''
+            provider.save()
+
+            return Response({
+                'status': 'success',
+                'message': 'Logged out from GitHub'
+            })
+        except AiProvider.DoesNotExist:
+            return Response({
+                'error': 'Provider not found'
+            }, status=status.HTTP_404_NOT_FOUND)

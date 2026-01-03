@@ -39,9 +39,11 @@ async def chat(
     """
     conversation = await sync_to_async(AiConversation.objects.get)(id=conversation_id)
     provider_config = await sync_to_async(AiProvider.objects.get)(id=provider_id)
+    # Use get_auth_token() to prioritize OAuth token over API key
+    auth_token = await sync_to_async(provider_config.get_auth_token)()
     provider = get_provider(
         provider_config.provider_type,
-        provider_config.api_key,
+        auth_token,
         provider_config.api_base_url or None
     )
 

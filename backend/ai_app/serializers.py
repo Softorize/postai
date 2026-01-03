@@ -8,15 +8,17 @@ class AiProviderSerializer(serializers.ModelSerializer):
 
     # Don't expose full API key in responses
     api_key_masked = serializers.SerializerMethodField()
+    is_oauth_authenticated = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = AiProvider
         fields = [
             'id', 'name', 'provider_type', 'api_key_masked',
             'api_base_url', 'default_model', 'is_active',
-            'max_requests_per_minute', 'created_at', 'updated_at'
+            'max_requests_per_minute', 'github_username',
+            'is_oauth_authenticated', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'api_key_masked']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'api_key_masked', 'is_oauth_authenticated']
 
     def get_api_key_masked(self, obj):
         """Return masked API key."""
