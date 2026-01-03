@@ -49,5 +49,5 @@ dmg:
 
 publish:
   provider: github
-  owner: postai
+  owner: GrigoriLab
   repo: postai
