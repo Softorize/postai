@@ -17,7 +17,8 @@ export function RequestNode({ data, selected }: NodeProps) {
     DELETE: 'bg-red-500/20 text-red-400',
   }
 
-  const hasRequest = !!requestId
+  // Request is configured if linked to collection OR has inline URL
+  const hasRequest = !!requestId || !!url
   const displayName = nodeName || 'HTTP Request'
 
   return (
@@ -46,9 +47,11 @@ export function RequestNode({ data, selected }: NodeProps) {
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${methodColors[method] || 'bg-gray-700'}`}>
                 {method}
               </span>
-              <span className="text-xs text-blue-100 font-medium truncate max-w-[150px]" title={requestName}>
-                {requestName}
-              </span>
+              {(requestName || nodeName) && (
+                <span className="text-xs text-blue-100 font-medium truncate max-w-[150px]" title={requestName || nodeName}>
+                  {requestName || nodeName}
+                </span>
+              )}
             </div>
             <p className="text-xs text-blue-300 truncate" title={url}>
               {url}

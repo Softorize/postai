@@ -342,6 +342,9 @@ token         → from Set Variable`}
         )
 
       case 'request':
+        // Check if this is an AI-generated inline request (has URL but no collection_id)
+        const isInlineRequest = !!data.url && !data.collection_id
+
         return (
           <div className="space-y-4">
             {/* Node Name */}
@@ -356,8 +359,68 @@ token         → from Set Variable`}
               />
             </div>
 
+            {/* Show inline request details if AI-generated */}
+            {isInlineRequest && (
+              <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                <p className="text-xs text-blue-400 mb-2 font-medium">AI-Generated Request</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    data.method === 'GET' ? 'bg-green-500/20 text-green-400' :
+                    data.method === 'POST' ? 'bg-blue-500/20 text-blue-400' :
+                    data.method === 'PUT' ? 'bg-orange-500/20 text-orange-400' :
+                    data.method === 'PATCH' ? 'bg-yellow-500/20 text-yellow-400' :
+                    data.method === 'DELETE' ? 'bg-red-500/20 text-red-400' :
+                    'bg-gray-500/20 text-gray-400'
+                  }`}>
+                    {data.method || 'GET'}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground mb-2">
+                  <HighlightedText text={data.url} />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  You can link to a collection request below to override this configuration.
+                </p>
+              </div>
+            )}
+
+            {/* Inline Method/URL editing for AI-generated requests */}
+            {isInlineRequest && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Method</label>
+                  <select
+                    value={data.method || 'GET'}
+                    onChange={(e) => handleChange('method', e.target.value)}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
+                  >
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="PATCH">PATCH</option>
+                    <option value="DELETE">DELETE</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">URL</label>
+                  <input
+                    type="text"
+                    value={data.url || ''}
+                    onChange={(e) => handleChange('url', e.target.value)}
+                    placeholder="{{baseUrl}}/api/endpoint"
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm font-mono"
+                  />
+                </div>
+              </>
+            )}
+
             {/* Collection Selection */}
-            <div>
+            <div className={isInlineRequest ? 'border-t border-border pt-4' : ''}>
+              {isInlineRequest && (
+                <p className="text-xs text-muted-foreground mb-2">
+                  Or link to a collection request:
+                </p>
+              )}
               <label className="block text-sm font-medium mb-1">Collection</label>
               <div className="relative">
                 <select
@@ -370,8 +433,9 @@ token         → from Set Variable`}
                       collection_id: newCollectionId,
                       request_id: '',
                       request_name: '',
-                      method: '',
-                      url: ''
+                      // Only clear method/url if selecting a collection
+                      method: newCollectionId ? '' : data.method,
+                      url: newCollectionId ? '' : data.url
                     }
                     setData(newData)
                     updateNodeData(node.id, newData)
@@ -442,7 +506,7 @@ token         → from Set Variable`}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               </div>
-              {!data.collection_id && (
+              {!data.collection_id && !isInlineRequest && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Select a collection first
                 </p>

@@ -1,7 +1,37 @@
-import { useState, useRef, useEffect } from 'react'
-import { X, Send, Trash2, Plus, Bot, User, Settings, Sparkles } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { X, Send, Trash2, Plus, Bot, User, Settings, Sparkles, Loader2, GitBranch } from 'lucide-react'
 import { useAiStore } from '../../stores/ai.store'
+import { useWorkflowsStore } from '../../stores/workflows.store'
+import { useCollectionsStore } from '../../stores/collections.store'
+import { useEnvironmentsStore } from '../../stores/environments.store'
+import { useTabsStore } from '../../stores/tabs.store'
 import { cn } from '../../lib/utils'
+import { Folder, Request } from '../../types'
+
+// Helper to flatten requests from collection folders
+function getAllRequests(folders: Folder[], requests: Request[]): Request[] {
+  let allRequests = [...requests]
+  for (const folder of folders) {
+    allRequests = [...allRequests, ...folder.requests]
+    if (folder.subfolders) {
+      allRequests = [...allRequests, ...getAllRequests(folder.subfolders, [])]
+    }
+  }
+  return allRequests
+}
+
+// Patterns to detect workflow generation intent
+const WORKFLOW_PATTERNS = [
+  /create\s+(a\s+)?workflow/i,
+  /build\s+(a\s+)?workflow/i,
+  /generate\s+(a\s+)?workflow/i,
+  /make\s+(a\s+)?workflow/i,
+  /design\s+(a\s+)?workflow/i,
+]
+
+function isWorkflowGenerationIntent(message: string): boolean {
+  return WORKFLOW_PATTERNS.some(pattern => pattern.test(message))
+}
 
 export function AiChatSidebar() {
   const {
@@ -21,11 +51,63 @@ export function AiChatSidebar() {
     sendMessage,
     clearConversationMessages,
     toggleSidebar,
-    setError
+    setError,
+    generateWorkflow
   } = useAiStore()
+
+  const { createWorkflow, fetchWorkflows } = useWorkflowsStore()
+  const { collections } = useCollectionsStore()
+  const { activeEnvironment } = useEnvironmentsStore()
+  const { openTab } = useTabsStore()
+
+  // Build context from collections and environments for workflow generation
+  const workflowContext = useMemo(() => {
+    const allRequests: Array<{ name: string; method: string; url: string; collectionName: string }> = []
+
+    for (const collection of collections) {
+      for (const request of collection.requests || []) {
+        allRequests.push({
+          name: request.name,
+          method: request.method,
+          url: request.url,
+          collectionName: collection.name
+        })
+      }
+      const folderRequests = getAllRequests(collection.folders || [], [])
+      for (const request of folderRequests) {
+        allRequests.push({
+          name: request.name,
+          method: request.method,
+          url: request.url,
+          collectionName: collection.name
+        })
+      }
+    }
+
+    const envVariables: Record<string, string> = {}
+    if (activeEnvironment?.variables) {
+      for (const variable of activeEnvironment.variables) {
+        if (variable.enabled !== false) {
+          // Get the currently selected value from multi-value array
+          const values = variable.values || []
+          const selectedIndex = variable.selected_value_index || 0
+          const currentValue = values[selectedIndex] || ''
+          envVariables[variable.key] = currentValue
+        }
+      }
+    }
+
+    return {
+      availableRequests: allRequests,
+      environmentVariables: envVariables,
+      activeEnvironmentName: activeEnvironment?.name || null
+    }
+  }, [collections, activeEnvironment])
 
   const [input, setInput] = useState('')
   const [showProviderSelector, setShowProviderSelector] = useState(false)
+  const [isGeneratingWorkflow, setIsGeneratingWorkflow] = useState(false)
+  const [workflowStatus, setWorkflowStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -62,15 +144,62 @@ export function AiChatSidebar() {
   const activeProvider = providers.find(p => p.id === activeProviderId)
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return
+    if (!input.trim() || isLoading || isGeneratingWorkflow) return
 
     const message = input.trim()
     setInput('')
+
+    // Check if user wants to generate a workflow
+    if (isWorkflowGenerationIntent(message)) {
+      await handleWorkflowGeneration(message)
+      return
+    }
 
     try {
       await sendMessage(message)
     } catch (err: any) {
       setError(err.message)
+    }
+  }
+
+  const handleWorkflowGeneration = async (description: string) => {
+    setIsGeneratingWorkflow(true)
+    setWorkflowStatus(null)
+
+    try {
+      // Generate workflow structure from AI with collection/environment context
+      const workflowData = await generateWorkflow(description, workflowContext)
+
+      // Create the workflow in the backend
+      const newWorkflow = await createWorkflow({
+        name: workflowData.name as string,
+        description: workflowData.description as string,
+        nodes: workflowData.nodes as any[],
+        edges: workflowData.edges as any[],
+        variables: workflowData.variables as Record<string, unknown> || {}
+      })
+
+      // Refresh workflows list
+      await fetchWorkflows()
+
+      // Open the workflow in a new tab
+      openTab({
+        type: 'workflow',
+        title: newWorkflow.name,
+        data: newWorkflow
+      })
+
+      setWorkflowStatus({
+        type: 'success',
+        message: `Created workflow "${newWorkflow.name}" with ${newWorkflow.nodes?.length || 0} nodes`
+      })
+    } catch (err: any) {
+      setWorkflowStatus({
+        type: 'error',
+        message: err.message || 'Failed to generate workflow'
+      })
+    } finally {
+      setIsGeneratingWorkflow(false)
     }
   }
 
@@ -258,6 +387,47 @@ export function AiChatSidebar() {
             </div>
           </div>
         )}
+
+        {isGeneratingWorkflow && (
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+              <GitBranch className="h-4 w-4 text-primary" />
+            </div>
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Generating workflow...
+              </div>
+            </div>
+          </div>
+        )}
+
+        {workflowStatus && (
+          <div className="flex gap-3">
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center",
+              workflowStatus.type === 'success' ? "bg-green-500/20" : "bg-red-500/20"
+            )}>
+              <GitBranch className={cn(
+                "h-4 w-4",
+                workflowStatus.type === 'success' ? "text-green-400" : "text-red-400"
+              )} />
+            </div>
+            <div className={cn(
+              "rounded-lg p-3 text-sm",
+              workflowStatus.type === 'success'
+                ? "bg-green-500/10 border border-green-500/20 text-green-400"
+                : "bg-red-500/10 border border-red-500/20 text-red-400"
+            )}>
+              <p>{workflowStatus.message}</p>
+              {workflowStatus.type === 'success' && (
+                <p className="text-xs mt-1 text-green-400/70">
+                  Workflow opened in new tab
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Error display */}
@@ -286,13 +456,13 @@ export function AiChatSidebar() {
                 ? 'Ask about APIs, debug requests...'
                 : 'Select a provider first'
             }
-            disabled={!activeProviderId || isLoading}
+            disabled={!activeProviderId || isLoading || isGeneratingWorkflow}
             className="flex-1 resize-none rounded-md border border-border bg-panel px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
             rows={2}
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || !activeProviderId || isLoading}
+            disabled={!input.trim() || !activeProviderId || isLoading || isGeneratingWorkflow}
             className="px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="h-4 w-4" />

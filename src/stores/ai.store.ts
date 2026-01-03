@@ -44,6 +44,7 @@ interface AiState {
   clearConversationMessages: (id: string) => Promise<void>
 
   generateRequest: (text: string, context?: Record<string, unknown>) => Promise<Record<string, unknown>>
+  generateWorkflow: (text: string, context?: Record<string, unknown>) => Promise<Record<string, unknown>>
   analyzeResponse: (responseData: Record<string, unknown>, requestContext?: Record<string, unknown>) => Promise<string>
 
   toggleSidebar: () => void
@@ -343,6 +344,28 @@ export const useAiStore = create<AiState>((set, get) => ({
       })
       set({ isLoading: false })
       return response.data
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false })
+      throw error
+    }
+  },
+
+  generateWorkflow: async (text, context = {}) => {
+    const { activeProviderId } = get()
+
+    if (!activeProviderId) {
+      throw new Error('No AI provider selected')
+    }
+
+    set({ isLoading: true, error: null })
+    try {
+      const response = await api.post('/ai/generate-workflow/', {
+        text,
+        provider_id: activeProviderId,
+        context
+      })
+      set({ isLoading: false })
+      return response.data.workflow
     } catch (error: any) {
       set({ error: error.message, isLoading: false })
       throw error

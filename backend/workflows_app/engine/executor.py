@@ -177,10 +177,21 @@ class WorkflowExecutor:
         url = self._resolve_variables(node_data.get('url', ''), context)
 
         # Start with base headers from the request
-        headers = {
-            k: self._resolve_variables(v, context)
-            for k, v in node_data.get('headers', {}).items()
-        }
+        # Handle both dict format {"key": "value"} and list format [{"key": "k", "value": "v"}]
+        raw_headers = node_data.get('headers', {})
+        headers = {}
+        if isinstance(raw_headers, dict):
+            headers = {
+                k: self._resolve_variables(v, context)
+                for k, v in raw_headers.items()
+            }
+        elif isinstance(raw_headers, list):
+            for header in raw_headers:
+                key = header.get('key', '').strip()
+                value = header.get('value', '')
+                enabled = header.get('enabled', True)
+                if key and enabled:
+                    headers[key] = self._resolve_variables(value, context)
 
         # Apply custom headers (override or add)
         custom_headers = node_data.get('custom_headers', [])

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import {
   Plus, Play, Trash2, Copy, ChevronLeft,
-  Send, GitBranch, Clock, Variable, AlertCircle
+  Send, GitBranch, Clock, Variable, AlertCircle, Sparkles
 } from 'lucide-react'
 import { useWorkflowsStore } from '../../stores/workflows.store'
 import { useEnvironmentsStore } from '../../stores/environments.store'
 import { WorkflowCanvas } from './WorkflowCanvas'
 import { NodePropertiesPanel } from './NodePropertiesPanel'
+import { GenerateWorkflowDialog } from './GenerateWorkflowDialog'
 import { cn } from '../../lib/utils'
 
 const NODE_PALETTE = [
@@ -42,6 +43,7 @@ export function WorkflowBuilder({ workflowId }: WorkflowBuilderProps) {
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [showNewDialog, setShowNewDialog] = useState(false)
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false)
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [executionResult, setExecutionResult] = useState<any>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -180,6 +182,14 @@ export function WorkflowBuilder({ workflowId }: WorkflowBuilderProps) {
           <>
             <h2 className="font-medium">Workflows</h2>
             <div className="flex-1" />
+            <button
+              onClick={() => setShowGenerateDialog(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-primary text-primary rounded hover:bg-primary/10"
+              title="Generate workflow with AI"
+            >
+              <Sparkles className="h-4 w-4" />
+              Generate with AI
+            </button>
             <button
               onClick={() => setShowNewDialog(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded hover:bg-primary/90"
@@ -471,6 +481,16 @@ export function WorkflowBuilder({ workflowId }: WorkflowBuilderProps) {
           </div>
         </div>
       )}
+
+      {/* Generate workflow with AI dialog */}
+      <GenerateWorkflowDialog
+        isOpen={showGenerateDialog}
+        onClose={() => setShowGenerateDialog(false)}
+        onSuccess={(workflowId) => {
+          setToast({ message: 'Workflow generated successfully!', type: 'success' })
+          setActiveWorkflow(workflowId)
+        }}
+      />
     </div>
   )
 }

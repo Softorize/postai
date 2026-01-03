@@ -114,3 +114,11 @@ class TestConnectionSerializer(serializers.Serializer):
     provider_type = serializers.ChoiceField(choices=AiProvider.ProviderType.choices)
     api_key = serializers.CharField(required=True)
     api_base_url = serializers.URLField(required=False, allow_blank=True)
+
+
+class GenerateWorkflowSerializer(serializers.Serializer):
+    """Serializer for workflow generation."""
+
+    text = serializers.CharField(required=True, help_text="Natural language description of the workflow")
+    provider_id = serializers.UUIDField(required=True, help_text="ID of the AI provider to use")
+    context = serializers.JSONField(required=False, default=dict, help_text="Optional context information")

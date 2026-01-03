@@ -19,6 +19,7 @@ from .serializers import (
     GenerateRequestSerializer,
     AnalyzeResponseSerializer,
     TestConnectionSerializer,
+    GenerateWorkflowSerializer,
 )
 from .providers import get_provider, ChatMessage
 from .services import (
@@ -27,6 +28,8 @@ from .services import (
     update_conversation_context,
     generate_request_from_text,
     analyze_response,
+    generate_workflow_from_text,
+    WorkflowGenerationError,
 )
 
 
@@ -233,6 +236,37 @@ class AnalyzeResponseView(APIView):
         except Exception as e:
             return Response({
                 'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GenerateWorkflowView(APIView):
+    """View for generating workflows from text."""
+
+    def post(self, request):
+        """Generate a workflow from natural language."""
+        serializer = GenerateWorkflowSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        text = serializer.validated_data['text']
+        provider_id = str(serializer.validated_data['provider_id'])
+        context = serializer.validated_data.get('context', {})
+
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(
+                generate_workflow_from_text(text, provider_id, context)
+            )
+            loop.close()
+
+            return Response({'workflow': result})
+        except WorkflowGenerationError as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'error': f"Failed to generate workflow: {str(e)}"
             }, status=status.HTTP_400_BAD_REQUEST)
 
 

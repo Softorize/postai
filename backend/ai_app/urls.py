@@ -5,6 +5,7 @@ from .views import (
     AiProviderViewSet,
     AiConversationViewSet,
     GenerateRequestView,
+    GenerateWorkflowView,
     AnalyzeResponseView,
     TestProviderConnectionView,
     GitHubDeviceCodeView,
@@ -19,6 +20,7 @@ router.register(r'conversations', AiConversationViewSet, basename='ai-conversati
 urlpatterns = [
     path('', include(router.urls)),
     path('generate-request/', GenerateRequestView.as_view(), name='ai-generate-request'),
+    path('generate-workflow/', GenerateWorkflowView.as_view(), name='ai-generate-workflow'),
     path('analyze-response/', AnalyzeResponseView.as_view(), name='ai-analyze-response'),
     path('test-connection/', TestProviderConnectionView.as_view(), name='ai-test-connection'),
     path('github/device-code/', GitHubDeviceCodeView.as_view(), name='github-device-code'),
