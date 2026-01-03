@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "npm run build:backend && tsc && vite build && electron-builder",
     "build:frontend": "tsc && vite build",
-    "build:backend": "cd backend && source .venv/bin/activate && pyinstaller postai_server.spec --clean --noconfirm",
+    "build:backend": "cd backend && .venv/bin/python -m PyInstaller postai_server.spec --clean --noconfirm",
     "build:python": "scripts/build-python.sh",
     "build:mac": "scripts/build-mac.sh",
     "preview": "vite preview",
