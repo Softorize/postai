@@ -2,17 +2,24 @@
 
 Advanced API Testing Tool with AI Integration for macOS.
 
-A Postman-like application with enhanced features including:
-- AI-powered request generation (Anthropic, DeepSeek)
-- MCP (Model Context Protocol) client support
-- Visual workflow builder (like n8n)
-- Multi-value environment variables with dropdown selection
-- Proxy support
+A Postman-like application with powerful features:
+- 🤖 AI-powered request generation (Anthropic, OpenAI, DeepSeek)
+- 🔌 MCP (Model Context Protocol) client for testing MCP servers
+- 🔀 Visual workflow builder for automated request sequences
+- 🌍 Multi-value environment variables with dropdown selection
+- 📦 Workspaces for project organization
+- 📥 Postman environment import
+
+## Download
+
+Get the latest release from [GitHub Releases](https://github.com/GrigoriLab/postai/releases).
+
+- **PostAI-x.x.x-arm64.dmg** - For Apple Silicon Macs (M1/M2/M3)
 
 ## Tech Stack
 
 - **Frontend**: Electron + React + TypeScript + Vite
-- **Backend**: Python Django (embedded)
+- **Backend**: Python Django (bundled via PyInstaller)
 - **UI**: Tailwind CSS, React Flow, Monaco Editor
 - **Storage**: SQLite
 
@@ -92,18 +99,48 @@ postai/
 
 ## Features
 
-### Core Features
-- Collections and folders organization
-- Request builder with all HTTP methods
-- Response viewer with JSON formatting
-- Environment variables with multi-value dropdown
+### Request Builder
+- All HTTP methods (GET, POST, PUT, PATCH, DELETE, etc.)
+- Headers, query params, and body editor
+- Multiple body types (JSON, form-data, raw, binary)
+- Authentication (Basic, Bearer, API Key, OAuth2)
+- Response viewer with syntax highlighting
+- Code snippet generation (cURL, Python, JavaScript, etc.)
 
-### Advanced Features (In Progress)
+### Collections & Organization
+- Collections and folders for organizing requests
+- Workspaces for separating projects
+- Deep search across collections, folders, and requests
+- Drag and drop organization
+
+### Environment Variables
+- Multi-value variables with dropdown selection
+- Link groups to switch related variables together
+- Variable highlighting in URL and editors
+- Import from Postman
+
+### Visual Workflow Builder
+- Drag-and-drop workflow canvas
+- HTTP request nodes with environment selection
+- Condition nodes for branching logic
+- Variable nodes for data transformation
+- Delay nodes for timing control
+- Real-time execution with step-by-step results
+
+### AI Integration
+- AI-powered request generation from natural language
+- Chat assistant for API help
+- Multiple providers (Anthropic, OpenAI, DeepSeek)
+
+### MCP Client
+- Connect to MCP (Model Context Protocol) servers
+- Browse and execute MCP tools
+- Test your MCP server implementations
+
+### Planned Features
 - [ ] Postman collection import
 - [ ] Proxy configuration
-- [ ] MCP client for testing MCP servers
-- [ ] Visual workflow builder
-- [ ] AI chat and request generation
+- [ ] Request history
 - [ ] Cloud sync
 
 ## API Endpoints
