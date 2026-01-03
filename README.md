@@ -10,11 +10,23 @@ A Postman-like application with powerful features:
 - 📦 Workspaces for project organization
 - 📥 Postman environment import
 
-## Download
+## Installation
+
+### Download
 
 Get the latest release from [GitHub Releases](https://github.com/GrigoriLab/postai/releases).
 
 - **PostAI-x.x.x-arm64.dmg** - For Apple Silicon Macs (M1/M2/M3)
+
+### First Launch (Important)
+
+Since the app is not yet code-signed, macOS will show a "damaged" warning. To fix this, run the following command in Terminal after copying PostAI to your Applications folder:
+
+```bash
+xattr -cr /Applications/PostAI.app
+```
+
+Then open PostAI normally. This only needs to be done once after installation.
 
 ## Tech Stack
 
@@ -159,6 +171,46 @@ PostAI supports multiple values per environment variable. Instead of editing var
 1. Add multiple values to a variable (e.g., multiple usernames)
 2. Use a dropdown to quickly switch between values
 3. The selected value is used when resolving `{{variable}}` placeholders
+
+## Code Signing & Notarization (For Developers)
+
+To distribute the app without the "damaged" warning, you need to code sign and notarize it with Apple.
+
+### Prerequisites
+
+1. **Apple Developer Account** ($99/year) - Sign up at https://developer.apple.com
+2. **Developer ID Application certificate** - Create in Apple Developer portal
+3. **App-Specific Password** - Generate at https://appleid.apple.com
+
+### Setup
+
+1. **Export your certificate** from Keychain Access as a `.p12` file
+
+2. **Base64 encode the certificate:**
+   ```bash
+   base64 -i Certificates.p12 | pbcopy
+   ```
+
+3. **Add GitHub Secrets** (Settings → Secrets → Actions):
+   - `APPLE_CERTIFICATE` - Base64 encoded .p12 certificate
+   - `APPLE_CERTIFICATE_PASSWORD` - Password for the .p12 file
+   - `APPLE_ID` - Your Apple ID email
+   - `APPLE_APP_SPECIFIC_PASSWORD` - App-specific password
+   - `APPLE_TEAM_ID` - Your 10-character Team ID
+
+4. **Update `electron-builder.yml`:**
+   ```yaml
+   mac:
+     hardenedRuntime: true
+     gatekeeperAssess: false
+     entitlements: resources/entitlements.mac.plist
+     entitlementsInherit: resources/entitlements.mac.plist
+
+   notarize:
+     teamId: ${env.APPLE_TEAM_ID}
+   ```
+
+5. **Update GitHub workflow** to import the certificate and set environment variables before building.
 
 ## License
 
