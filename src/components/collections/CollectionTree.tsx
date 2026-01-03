@@ -9,6 +9,7 @@ import {
   FolderPlus,
   FilePlus,
   GitBranch,
+  Pencil,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useCollectionsStore } from '@/stores/collections.store'
@@ -462,11 +463,12 @@ function RequestItem({
   collectionId: string
   searchQuery: string
 }) {
-  const { openTab, activeTabId, tabs } = useTabsStore()
-  const { deleteRequest, highlightedRequestId } = useCollectionsStore()
+  const { openTab, activeTabId, tabs, updateTab } = useTabsStore()
+  const { deleteRequest, updateRequest, highlightedRequestId } = useCollectionsStore()
   const { workflows, fetchWorkflows, addNodeToWorkflow } = useWorkflowsStore()
   const [showMenu, setShowMenu] = useState(false)
   const [showWorkflowPicker, setShowWorkflowPicker] = useState(false)
+  const [showRenameDialog, setShowRenameDialog] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const itemRef = useRef<HTMLDivElement>(null)
 
@@ -515,6 +517,16 @@ function RequestItem({
       await deleteRequest(collectionId, request.id)
     }
     setShowMenu(false)
+  }
+
+  const handleRename = async (newName: string) => {
+    await updateRequest(collectionId, request.id, { name: newName })
+    // Update any open tabs with this request
+    const openTab = tabs.find(t => t.type === 'request' && (t.data as Request)?.id === request.id)
+    if (openTab) {
+      updateTab(openTab.id, { title: newName, data: { ...openTab.data, name: newName } as Request })
+    }
+    setShowRenameDialog(false)
   }
 
   const methodColors: Record<HttpMethod, string> = {
@@ -569,6 +581,17 @@ function RequestItem({
             onClick={(e) => {
               e.stopPropagation()
               setShowMenu(false)
+              setShowRenameDialog(true)
+            }}
+          >
+            <Pencil className="w-4 h-4" />
+            Rename
+          </button>
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowMenu(false)
               setShowWorkflowPicker(true)
             }}
           >
@@ -601,6 +624,17 @@ function RequestItem({
           onClose={() => setShowWorkflowPicker(false)}
         />
       )}
+
+      {/* Rename Dialog */}
+      <InputDialog
+        isOpen={showRenameDialog}
+        title="Rename Request"
+        placeholder="Request name..."
+        defaultValue={request.name}
+        confirmText="Rename"
+        onConfirm={handleRename}
+        onCancel={() => setShowRenameDialog(false)}
+      />
     </div>
   )
 }
