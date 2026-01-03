@@ -11,6 +11,8 @@ python-dist/
 
 # Python
 backend/.venv/
+backend/build/
+backend/dist/
 backend/__pycache__/
 backend/*/__pycache__/
 backend/*/*/__pycache__/
