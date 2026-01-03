@@ -33,7 +33,7 @@ export function EndNode({ selected, data }: NodeProps) {
       {resultVariable && (
         <div className="px-3 py-2 border-t border-red-700/50 bg-black/20">
           {resultLabel && (
-            <div className="text-xs text-red-300/80 mb-1">{resultLabel}</div>
+            <div className="text-xs text-red-300 mb-1">{resultLabel}</div>
           )}
           <div className="flex items-center gap-1.5">
             <ArrowRight className="h-3 w-3 text-red-400" />

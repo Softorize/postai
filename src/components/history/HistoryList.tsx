@@ -10,7 +10,13 @@ interface HistoryListProps {
 
 export function HistoryList({ searchQuery = '' }: HistoryListProps) {
   const { entries, isLoading, fetchHistory, getHistoryDetail, deleteEntry, clearHistory } = useHistoryStore()
-  const { openTab } = useTabsStore()
+  const { openTab, tabs, activeTabId } = useTabsStore()
+
+  // Get the currently selected history entry ID from active tab
+  const activeTab = tabs.find(t => t.id === activeTabId)
+  const activeHistoryId = activeTab?.data?.id?.toString().startsWith('history-')
+    ? activeTab.data.id.toString().replace('history-', '')
+    : null
 
   useEffect(() => {
     fetchHistory()
@@ -155,10 +161,17 @@ export function HistoryList({ searchQuery = '' }: HistoryListProps) {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {filteredEntries.map((entry) => (
+            {filteredEntries.map((entry) => {
+              const isSelected = activeHistoryId === entry.id.toString()
+              return (
               <div
                 key={entry.id}
-                className="group px-3 py-2 hover:bg-white/5 cursor-pointer"
+                className={clsx(
+                  "group px-3 py-2 cursor-pointer transition-colors",
+                  isSelected
+                    ? "bg-primary-500/20 border-l-2 border-primary-500"
+                    : "hover:bg-white/5 border-l-2 border-transparent"
+                )}
                 onClick={() => handleOpenEntry(entry)}
               >
                 <div className="flex items-center gap-2">
@@ -184,11 +197,12 @@ export function HistoryList({ searchQuery = '' }: HistoryListProps) {
                 <div className="text-xs text-text-secondary truncate mt-1">
                   {entry.url}
                 </div>
-                <div className="text-xs text-text-secondary/50 mt-0.5">
+                <div className="text-xs text-text-secondary mt-0.5">
                   {formatTime(entry.created_at)}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

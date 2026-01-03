@@ -25,7 +25,7 @@ export function DelayNode({ data, selected }: NodeProps) {
         </div>
         <div>
           <span className="text-sm font-medium text-yellow-300">{displayName}</span>
-          <p className="text-xs text-yellow-400/70">
+          <p className="text-xs text-yellow-400">
             {delayMs >= 1000 ? `${delayMs / 1000}s` : `${delayMs}ms`}
           </p>
         </div>

@@ -86,7 +86,7 @@ function ConsoleEntryDetails({ entry }: { entry: ConsoleEntry }) {
             <div>
               <h4 className="text-xs font-semibold text-text-secondary mb-2 flex items-center gap-2">
                 <span className="text-green-400">Request Headers</span>
-                <span className="text-text-secondary/50">
+                <span className="text-text-secondary">
                   ({Object.keys(entry.requestHeaders || {}).length})
                 </span>
               </h4>
@@ -108,7 +108,7 @@ function ConsoleEntryDetails({ entry }: { entry: ConsoleEntry }) {
             <div>
               <h4 className="text-xs font-semibold text-text-secondary mb-2 flex items-center gap-2">
                 <span className="text-blue-400">Response Headers</span>
-                <span className="text-text-secondary/50">
+                <span className="text-text-secondary">
                   ({Object.keys(entry.responseHeaders || {}).length})
                 </span>
               </h4>
@@ -323,7 +323,7 @@ export function ConsolePanel() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Filter requests..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-black/30 border border-border rounded focus:outline-none focus:border-primary-500 placeholder:text-text-secondary/50"
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-black/30 border border-border rounded focus:outline-none focus:border-primary-500 placeholder:text-text-secondary"
             />
           </div>
         </div>

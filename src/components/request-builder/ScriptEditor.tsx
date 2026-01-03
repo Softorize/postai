@@ -203,7 +203,7 @@ export function ScriptEditor({ value, onChange, type }: ScriptEditorProps) {
           {/* Syntax highlighted overlay */}
           <pre className="absolute inset-0 px-4 py-3 bg-transparent font-mono text-sm overflow-auto pointer-events-none whitespace-pre-wrap break-words">
             {value ? highlightJS(value) : (
-              <span className="text-text-secondary/50">
+              <span className="text-text-secondary">
                 {type === 'pre-request'
                   ? '// Pre-request script runs before the request\n// Use pm.environment.set() to set variables\n// Use pm.request.headers.add() to modify headers'
                   : '// Test script runs after response\n// Use pm.test() to create tests\n// Use pm.expect() for assertions'

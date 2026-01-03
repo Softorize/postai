@@ -29,7 +29,7 @@ export function ConditionNode({ data, selected }: NodeProps) {
       </div>
 
       <div className="px-3 py-2">
-        <p className="text-xs text-purple-300/70 truncate">
+        <p className="text-xs text-purple-300 truncate">
           {left || '...'} {condition} {right || '...'}
         </p>
       </div>

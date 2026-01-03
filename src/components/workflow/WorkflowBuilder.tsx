@@ -267,7 +267,7 @@ export function WorkflowBuilder({ workflowId }: WorkflowBuilderProps) {
                                     : JSON.stringify(formattedResult, null, 2)
                                   navigator.clipboard.writeText(text)
                                 }}
-                                className="text-xs text-primary/70 hover:text-primary"
+                                className="text-xs text-primary hover:text-primary"
                               >
                                 Copy
                               </button>
@@ -404,7 +404,7 @@ export function WorkflowBuilder({ workflowId }: WorkflowBuilderProps) {
               <p className="text-sm text-destructive">{error}</p>
               <button
                 onClick={() => setError(null)}
-                className="text-xs text-destructive/70 hover:text-destructive"
+                className="text-xs text-destructive hover:text-destructive"
               >
                 Dismiss
               </button>

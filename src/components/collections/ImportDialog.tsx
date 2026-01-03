@@ -3,6 +3,7 @@ import { Upload, FileJson, X, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { api } from '@/api/client'
 import { useCollectionsStore } from '@/stores/collections.store'
+import { useWorkspacesStore } from '@/stores/workspaces.store'
 import toast from 'react-hot-toast'
 
 interface ImportDialogProps {
@@ -21,6 +22,7 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   } | null>(null)
 
   const { fetchCollections } = useCollectionsStore()
+  const { activeWorkspace } = useWorkspacesStore()
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -62,7 +64,10 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
     try {
       const content = await file.text()
 
-      const response = await api.post('/collections/import/', { content })
+      const response = await api.post('/collections/import/', {
+        content,
+        workspace_id: activeWorkspace?.id,
+      })
 
       if (response.data.success) {
         setResult({

@@ -31,7 +31,7 @@ export function VariableNode({ data, selected }: NodeProps) {
         <p className="text-xs">
           <span className="font-medium text-cyan-400">{name}</span>
           <span className="text-cyan-500"> = </span>
-          <span className="text-cyan-300/70 truncate">{value || '...'}</span>
+          <span className="text-cyan-300 truncate">{value || '...'}</span>
         </p>
       </div>
 

@@ -55,8 +55,19 @@ class CollectionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Get workspace - from request or use default/active
+        workspace_id = request.data.get('workspace_id')
+        workspace = None
+        if workspace_id:
+            try:
+                workspace = Workspace.objects.get(pk=workspace_id)
+            except Workspace.DoesNotExist:
+                pass
+        if not workspace:
+            workspace = Workspace.get_or_create_default()
+
         # Import the collection
-        result = import_postman_file(file_content)
+        result = import_postman_file(file_content, workspace)
 
         if result.success:
             # Fetch the imported collection

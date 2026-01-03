@@ -130,7 +130,7 @@ export function WorkflowList({ searchQuery = '' }: WorkflowListProps) {
                     {workflow.description}
                   </div>
                 )}
-                <div className="flex items-center gap-3 mt-1 ml-6 text-xs text-text-secondary/50">
+                <div className="flex items-center gap-3 mt-1 ml-6 text-xs text-text-secondary">
                   <span>{(workflow as any).node_count || 0} nodes</span>
                   <span>{(workflow as any).execution_count || 0} runs</span>
                 </div>

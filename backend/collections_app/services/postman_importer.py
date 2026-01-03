@@ -7,6 +7,7 @@ import json
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from ..models import Collection, Folder, Request
+from core.models import Workspace
 
 
 @dataclass
@@ -31,7 +32,7 @@ class PostmanImporter:
         self.requests_count = 0
         self.folders_count = 0
 
-    def import_collection(self, data: Dict[str, Any]) -> ImportResult:
+    def import_collection(self, data: Dict[str, Any], workspace: Optional[Workspace] = None) -> ImportResult:
         """Import a Postman collection from JSON data."""
         try:
             # Validate schema version
@@ -44,10 +45,15 @@ class PostmanImporter:
                     errors=[f"Unsupported schema version: {schema}. Supported: {self.SUPPORTED_VERSIONS}"]
                 )
 
+            # Get workspace - use provided or get default
+            if workspace is None:
+                workspace = Workspace.get_or_create_default()
+
             # Create collection
             collection = Collection.objects.create(
                 name=info.get('name', 'Imported Collection'),
                 description=self._get_description(info.get('description')),
+                workspace=workspace,
                 postman_id=info.get('_postman_id'),
                 schema_version=self._extract_version(schema),
                 variables=self._convert_variables(data.get('variable', [])),
@@ -354,12 +360,12 @@ class PostmanImporter:
         return 'v2.1.0'
 
 
-def import_postman_file(file_content: str) -> ImportResult:
+def import_postman_file(file_content: str, workspace: Optional[Workspace] = None) -> ImportResult:
     """Import Postman collection from file content."""
     try:
         data = json.loads(file_content)
         importer = PostmanImporter()
-        return importer.import_collection(data)
+        return importer.import_collection(data, workspace)
     except json.JSONDecodeError as e:
         return ImportResult(success=False, errors=[f"Invalid JSON: {str(e)}"])
 

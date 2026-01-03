@@ -226,7 +226,7 @@ export function AiProviderSettings({ isOpen, onClose }: Props) {
                 <p className="text-sm text-destructive">{error}</p>
                 <button
                   onClick={() => setError(null)}
-                  className="text-xs text-destructive/70 hover:text-destructive"
+                  className="text-xs text-destructive hover:text-destructive"
                 >
                   Dismiss
                 </button>

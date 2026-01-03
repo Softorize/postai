@@ -50,7 +50,7 @@ export function RequestNode({ data, selected }: NodeProps) {
                 {requestName}
               </span>
             </div>
-            <p className="text-xs text-blue-300/60 truncate" title={url}>
+            <p className="text-xs text-blue-300 truncate" title={url}>
               {url}
             </p>
           </div>
@@ -66,7 +66,7 @@ export function RequestNode({ data, selected }: NodeProps) {
       {outputVariable && (
         <div className="px-3 py-1.5 border-t border-blue-700/50 flex items-center gap-1.5">
           <ArrowRight className="h-3 w-3 text-blue-400" />
-          <span className="text-xs text-blue-300/80 font-mono">{outputVariable}</span>
+          <span className="text-xs text-blue-300 font-mono">{outputVariable}</span>
         </div>
       )}
 

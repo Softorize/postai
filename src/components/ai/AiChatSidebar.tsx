@@ -266,7 +266,7 @@ export function AiChatSidebar() {
           <p className="text-sm text-red-400">{error}</p>
           <button
             onClick={() => setError(null)}
-            className="text-xs text-red-400/70 hover:text-red-400"
+            className="text-xs text-red-400 hover:text-red-400"
           >
             Dismiss
           </button>
