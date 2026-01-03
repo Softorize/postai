@@ -10,8 +10,16 @@ interface CollectionsState {
   isLoading: boolean
   error: string | null
 
+  // UI state - track expanded collections/folders by ID
+  expandedIds: Set<string>
+  highlightedRequestId: string | null
+
   // Actions
   fetchCollections: () => Promise<void>
+  toggleExpanded: (id: string) => void
+  setExpanded: (id: string, expanded: boolean) => void
+  revealRequest: (requestId: string) => void
+  clearHighlight: () => void
   createCollection: (name: string, description?: string) => Promise<Collection>
   updateCollection: (id: string, data: Partial<Collection>) => Promise<void>
   deleteCollection: (id: string) => Promise<void>
@@ -36,6 +44,82 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
   selectedRequest: null,
   isLoading: false,
   error: null,
+  expandedIds: new Set<string>(),
+  highlightedRequestId: null,
+
+  toggleExpanded: (id: string) => {
+    set((state) => {
+      const newExpandedIds = new Set(state.expandedIds)
+      if (newExpandedIds.has(id)) {
+        newExpandedIds.delete(id)
+      } else {
+        newExpandedIds.add(id)
+      }
+      return { expandedIds: newExpandedIds }
+    })
+  },
+
+  setExpanded: (id: string, expanded: boolean) => {
+    set((state) => {
+      const newExpandedIds = new Set(state.expandedIds)
+      if (expanded) {
+        newExpandedIds.add(id)
+      } else {
+        newExpandedIds.delete(id)
+      }
+      return { expandedIds: newExpandedIds }
+    })
+  },
+
+  revealRequest: (requestId: string) => {
+    const { collections, expandedIds } = get()
+    const newExpandedIds = new Set(expandedIds)
+
+    // Helper to find request and its path
+    const findRequestPath = (
+      folders: Folder[] | undefined,
+      path: string[]
+    ): string[] | null => {
+      if (!folders) return null
+      for (const folder of folders) {
+        // Check if request is in this folder
+        if (folder.requests?.some(r => r.id === requestId)) {
+          return [...path, folder.id]
+        }
+        // Check subfolders
+        const subPath = findRequestPath(folder.subfolders, [...path, folder.id])
+        if (subPath) return subPath
+      }
+      return null
+    }
+
+    // Find the collection and path to the request
+    for (const collection of collections) {
+      // Check root-level requests
+      if (collection.requests?.some(r => !r.folder && r.id === requestId)) {
+        newExpandedIds.add(collection.id)
+        set({ expandedIds: newExpandedIds, highlightedRequestId: requestId })
+        // Clear highlight after animation
+        setTimeout(() => set({ highlightedRequestId: null }), 2000)
+        return
+      }
+
+      // Check folders
+      const path = findRequestPath(collection.folders, [collection.id])
+      if (path) {
+        // Expand all folders in the path
+        path.forEach(id => newExpandedIds.add(id))
+        set({ expandedIds: newExpandedIds, highlightedRequestId: requestId })
+        // Clear highlight after animation
+        setTimeout(() => set({ highlightedRequestId: null }), 2000)
+        return
+      }
+    }
+  },
+
+  clearHighlight: () => {
+    set({ highlightedRequestId: null })
+  },
 
   fetchCollections: async () => {
     set({ isLoading: true, error: null })

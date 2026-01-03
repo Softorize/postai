@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Code2, Copy, Check, ChevronDown, Search, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { generateCodeSnippet, LANGUAGE_OPTIONS, RequestConfig } from '@/utils/codeSnippets'
+import { useEnvironmentsStore } from '@/stores/environments.store'
 
 interface CodeSnippetPanelProps {
   config: RequestConfig
@@ -192,12 +193,47 @@ export function CodeSnippetPanel({ config, isOpen, onClose }: CodeSnippetPanelPr
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [copied, setCopied] = useState(false)
+  const { resolveVariables, activeEnvironment } = useEnvironmentsStore()
 
   const selectedLangOption = LANGUAGE_OPTIONS.find(l => l.id === selectedLanguage) || LANGUAGE_OPTIONS[0]
 
+  // Resolve environment variables in the config
+  // activeEnvironment is included as dependency to re-render when environment changes
+  const resolvedConfig = useMemo((): RequestConfig => {
+    return {
+      method: config.method,
+      url: resolveVariables(config.url),
+      headers: config.headers?.map(h => ({
+        ...h,
+        key: resolveVariables(h.key),
+        value: resolveVariables(h.value),
+      })),
+      params: config.params?.map(p => ({
+        ...p,
+        key: resolveVariables(p.key),
+        value: resolveVariables(p.value),
+      })),
+      body: config.body ? {
+        ...config.body,
+        raw: config.body.raw ? resolveVariables(config.body.raw) : undefined,
+        urlencoded: config.body.urlencoded?.map(item => ({
+          ...item,
+          key: resolveVariables(item.key),
+          value: resolveVariables(item.value),
+        })),
+        formdata: config.body.formdata?.map(item => ({
+          ...item,
+          key: resolveVariables(item.key),
+          value: item.type === 'text' ? resolveVariables(item.value) : item.value,
+        })),
+      } : undefined,
+      auth: config.auth,
+    }
+  }, [config, resolveVariables, activeEnvironment])
+
   const code = useMemo(() => {
-    return generateCodeSnippet(selectedLanguage, config)
-  }, [selectedLanguage, config])
+    return generateCodeSnippet(selectedLanguage, resolvedConfig)
+  }, [selectedLanguage, resolvedConfig])
 
   const handleCopy = async () => {
     try {

@@ -21,6 +21,24 @@
   background: #555;
 }
 
+/* Thin scrollbar for tabs */
+.tab-scrollbar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tab-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tab-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+.tab-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 /* Base styles */
 html, body, #root {
   height: 100%;

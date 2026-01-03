@@ -1,5 +1,6 @@
 import { useBackendStore } from '@/stores/backend.store'
 import { useEnvironmentsStore } from '@/stores/environments.store'
+import packageJson from '../../../package.json'
 
 export function StatusBar() {
   const { isConnected } = useBackendStore()
@@ -32,7 +33,7 @@ export function StatusBar() {
 
       {/* Version info */}
       <div className="text-text-secondary">
-        PostAI v1.0.0
+        PostAI v{packageJson.version}
       </div>
     </footer>
   )

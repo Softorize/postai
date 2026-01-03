@@ -84,22 +84,23 @@ export function CollectionTree({ searchQuery }: CollectionTreeProps) {
 }
 
 function CollectionItem({ collection, searchQuery }: { collection: Collection; searchQuery: string }) {
-  const [isExpanded, setIsExpanded] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showFolderDialog, setShowFolderDialog] = useState(false)
   const [showRequestDialog, setShowRequestDialog] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { deleteCollection, createFolder, createRequest } = useCollectionsStore()
+  const { deleteCollection, createFolder, createRequest, expandedIds, toggleExpanded, setExpanded } = useCollectionsStore()
   const { openTab } = useTabsStore()
+
+  const isExpanded = expandedIds.has(collection.id)
 
   // Auto-expand when searching and this collection has matches
   const shouldAutoExpand = searchQuery && collectionMatchesSearch(collection, searchQuery)
 
   useEffect(() => {
-    if (shouldAutoExpand) {
-      setIsExpanded(true)
+    if (shouldAutoExpand && !isExpanded) {
+      setExpanded(collection.id, true)
     }
-  }, [shouldAutoExpand])
+  }, [shouldAutoExpand, isExpanded, collection.id, setExpanded])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -129,7 +130,7 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
   const handleConfirmAddFolder = async (name: string) => {
     try {
       await createFolder(collection.id, name)
-      setIsExpanded(true)
+      setExpanded(collection.id, true)
       setShowFolderDialog(false)
     } catch (error) {
       console.error('Failed to create folder:', error)
@@ -145,7 +146,7 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
   const handleConfirmAddRequest = async (name: string) => {
     try {
       const newRequest = await createRequest(collection.id, { name, method: 'GET', url: '' })
-      setIsExpanded(true)
+      setExpanded(collection.id, true)
       setShowRequestDialog(false)
       // Open the new request in a tab
       openTab({
@@ -163,7 +164,7 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
     <div className="relative">
       <div
         className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/5 cursor-pointer group"
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={() => toggleExpanded(collection.id)}
       >
         <button className="p-0.5">
           {isExpanded ? (
@@ -290,21 +291,22 @@ function FolderItem({
   collectionId: string
   searchQuery: string
 }) {
-  const [isExpanded, setIsExpanded] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showRequestDialog, setShowRequestDialog] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { deleteFolder, createRequest } = useCollectionsStore()
+  const { deleteFolder, createRequest, expandedIds, toggleExpanded, setExpanded } = useCollectionsStore()
   const { openTab } = useTabsStore()
+
+  const isExpanded = expandedIds.has(folder.id)
 
   // Auto-expand when searching and this folder has matches
   const shouldAutoExpand = searchQuery && folderMatchesSearch(folder, searchQuery)
 
   useEffect(() => {
-    if (shouldAutoExpand) {
-      setIsExpanded(true)
+    if (shouldAutoExpand && !isExpanded) {
+      setExpanded(folder.id, true)
     }
-  }, [shouldAutoExpand])
+  }, [shouldAutoExpand, isExpanded, folder.id, setExpanded])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -334,7 +336,7 @@ function FolderItem({
   const handleConfirmAddRequest = async (name: string) => {
     try {
       const newRequest = await createRequest(collectionId, { name, method: 'GET', url: '', folder: folder.id })
-      setIsExpanded(true)
+      setExpanded(folder.id, true)
       setShowRequestDialog(false)
       // Open the new request in a tab
       openTab({
@@ -352,7 +354,7 @@ function FolderItem({
     <div className="relative">
       <div
         className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/5 cursor-pointer group"
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={() => toggleExpanded(folder.id)}
       >
         <button className="p-0.5">
           {isExpanded ? (
@@ -458,10 +460,23 @@ function RequestItem({
   collectionId: string
   searchQuery: string
 }) {
-  const { openTab } = useTabsStore()
-  const { deleteRequest } = useCollectionsStore()
+  const { openTab, activeTabId, tabs } = useTabsStore()
+  const { deleteRequest, highlightedRequestId } = useCollectionsStore()
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const itemRef = useRef<HTMLDivElement>(null)
+
+  // Check if this request is in the active tab
+  const activeTab = tabs.find(t => t.id === activeTabId)
+  const isActive = activeTab?.type === 'request' && (activeTab.data as Request)?.id === request.id
+  const isHighlighted = highlightedRequestId === request.id
+
+  // Scroll into view when highlighted
+  useEffect(() => {
+    if (isHighlighted && itemRef.current) {
+      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [isHighlighted])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -502,9 +517,14 @@ function RequestItem({
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={itemRef}>
       <div
-        className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 cursor-pointer group"
+        className={clsx(
+          "flex items-center gap-2 px-2 py-1.5 cursor-pointer group transition-colors",
+          isActive && "bg-primary-600/20 border-l-2 border-primary-500",
+          !isActive && "hover:bg-white/5",
+          isHighlighted && "animate-pulse bg-primary-500/30"
+        )}
         onClick={handleClick}
       >
         <span
