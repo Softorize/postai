@@ -24,10 +24,11 @@ export function McpList({ searchQuery = '' }: McpListProps) {
 
   const handleServerClick = (server: typeof servers[0]) => {
     // Open MCP tab with specific server selected
+    // Use server.id as the data id so each server gets its own tab
     openTab({
       type: 'mcp',
       title: server.name,
-      data: { serverId: server.id },
+      data: { id: server.id, serverId: server.id },
     })
   }
 
