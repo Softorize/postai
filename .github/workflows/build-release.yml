@@ -72,7 +72,7 @@ jobs:
 
   # Optional: Build for Intel Macs
   build-macos-intel:
-    runs-on: macos-13  # Intel runner
+    runs-on: macos-15  # Intel build on macOS 15
 
     steps:
       - name: Checkout code
