@@ -23,7 +23,7 @@ class McpServerSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'transport_type',
             'command', 'args', 'url', 'headers', 'env_vars',
             'is_connected', 'last_connected_at', 'capabilities',
-            'created_at', 'updated_at'
+            'workspace', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'is_connected', 'last_connected_at', 'created_at', 'updated_at']
 

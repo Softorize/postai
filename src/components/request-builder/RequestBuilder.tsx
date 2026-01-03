@@ -9,6 +9,7 @@ import { useTabsStore, RequestDraft } from '@/stores/tabs.store'
 import { useEnvironmentsStore } from '@/stores/environments.store'
 import { useCollectionsStore } from '@/stores/collections.store'
 import { useConsoleStore } from '@/stores/console.store'
+import { useWorkspacesStore } from '@/stores/workspaces.store'
 import { api } from '@/api/client'
 import toast from 'react-hot-toast'
 import { UrlBar } from './UrlBar'
@@ -112,6 +113,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
   const { resolveVariables } = useEnvironmentsStore()
   const { updateRequest } = useCollectionsStore()
   const { addEntry, updateEntry } = useConsoleStore()
+  const { activeWorkspace } = useWorkspacesStore()
   const currentEntryId = useRef<string | null>(null)
   const isInitializing = useRef(true)
 
@@ -424,6 +426,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
         url: finalUrl,
         headers: finalHeaders,
         body: scriptRequest.body,
+        workspace_id: activeWorkspace?.id,
       }
 
       // Add HMAC auth config for backend to compute signature

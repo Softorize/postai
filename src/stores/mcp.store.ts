@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import api from '../api/client'
 import { McpServer, McpTool, McpResource, McpPrompt } from '../types'
+import { useWorkspacesStore } from './workspaces.store'
 
 interface McpState {
   servers: McpServer[]
@@ -43,7 +44,9 @@ export const useMcpStore = create<McpState>((set, get) => ({
 
   fetchServers: async () => {
     try {
-      const response = await api.get('/mcp/servers/')
+      const activeWorkspace = useWorkspacesStore.getState().activeWorkspace
+      const params = activeWorkspace ? { workspace: activeWorkspace.id } : {}
+      const response = await api.get('/mcp/servers/', { params })
       set({ servers: response.data.results || response.data })
     } catch (error: any) {
       set({ error: error.message })
@@ -53,7 +56,11 @@ export const useMcpStore = create<McpState>((set, get) => ({
   createServer: async (server) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.post('/mcp/servers/', server)
+      const activeWorkspace = useWorkspacesStore.getState().activeWorkspace
+      const serverData = activeWorkspace
+        ? { ...server, workspace: activeWorkspace.id }
+        : server
+      const response = await api.post('/mcp/servers/', serverData)
       const newServer = response.data
       set(state => ({
         servers: [...state.servers, newServer],

@@ -29,6 +29,14 @@ class McpServerViewSet(viewsets.ModelViewSet):
             return McpServerListSerializer
         return McpServerSerializer
 
+    def get_queryset(self):
+        """Filter by workspace if provided."""
+        queryset = McpServer.objects.all()
+        workspace_id = self.request.query_params.get('workspace')
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        return queryset
+
     @action(detail=True, methods=['post'])
     def connect(self, request, pk=None):
         """Connect to the MCP server and refresh capabilities."""

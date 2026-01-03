@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .services import execute_request
 from .models import RequestHistory
+from core.models import Workspace
 
 
 class ExecuteRequestView(APIView):
@@ -27,6 +28,7 @@ class ExecuteRequestView(APIView):
         proxy = request.data.get('proxy')
         save_history = request.data.get('save_history', True)
         hmac_auth = request.data.get('hmac_auth')
+        workspace_id = request.data.get('workspace_id')
 
         if not url:
             return Response(
@@ -57,7 +59,16 @@ class ExecuteRequestView(APIView):
 
         # Save to history if requested
         if save_history:
+            # Get workspace if provided
+            workspace = None
+            if workspace_id:
+                try:
+                    workspace = Workspace.objects.get(pk=workspace_id)
+                except Workspace.DoesNotExist:
+                    pass
+
             RequestHistory.objects.create(
+                workspace=workspace,
                 method=method,
                 url=url,
                 resolved_url=url,
@@ -158,7 +169,15 @@ class RequestHistoryView(APIView):
     def get(self, request):
         """Get request history."""
         limit = int(request.query_params.get('limit', 50))
-        history = RequestHistory.objects.all()[:limit]
+        workspace_id = request.query_params.get('workspace')
+
+        history = RequestHistory.objects.all()
+
+        # Filter by workspace if provided
+        if workspace_id:
+            history = history.filter(workspace_id=workspace_id)
+
+        history = history[:limit]
 
         data = [
             {
@@ -180,7 +199,11 @@ class RequestHistoryView(APIView):
 
     def delete(self, request):
         """Clear all history."""
-        RequestHistory.objects.all().delete()
+        workspace_id = request.query_params.get('workspace')
+        if workspace_id:
+            RequestHistory.objects.filter(workspace_id=workspace_id).delete()
+        else:
+            RequestHistory.objects.all().delete()
         return Response({'status': 'cleared'})
 
 

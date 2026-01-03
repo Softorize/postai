@@ -1,6 +1,6 @@
 """MCP models for PostAI."""
 from django.db import models
-from core.models import BaseModel
+from core.models import BaseModel, Workspace
 
 
 class McpServer(BaseModel):
@@ -11,6 +11,13 @@ class McpServer(BaseModel):
         SSE = 'sse'
         HTTP = 'http'
 
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='mcp_servers',
+        null=True,
+        blank=True
+    )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default='')
     transport_type = models.CharField(

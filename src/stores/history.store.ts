@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from '@/api/client'
+import { useWorkspacesStore } from './workspaces.store'
 
 export interface HistoryEntry {
   id: string
@@ -40,7 +41,12 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   fetchHistory: async (limit = 50) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.get(`/requests/history/?limit=${limit}`)
+      const activeWorkspace = useWorkspacesStore.getState().activeWorkspace
+      const params: Record<string, string | number> = { limit }
+      if (activeWorkspace) {
+        params.workspace = activeWorkspace.id
+      }
+      const response = await api.get('/requests/history/', { params })
       set({ entries: response.data, isLoading: false })
     } catch (err) {
       set({ error: 'Failed to fetch history', isLoading: false })

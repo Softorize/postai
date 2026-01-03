@@ -1,11 +1,18 @@
 """Request history models for PostAI."""
 from django.db import models
-from core.models import BaseModel
+from core.models import BaseModel, Workspace
 from collections_app.models import Request
 
 
 class RequestHistory(BaseModel):
     """History of executed requests."""
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='request_history',
+        null=True,
+        blank=True
+    )
     request = models.ForeignKey(
         Request,
         on_delete=models.SET_NULL,
