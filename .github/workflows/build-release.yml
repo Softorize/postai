@@ -10,6 +10,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   build-macos:
     runs-on: macos-14  # Apple Silicon runner
@@ -46,8 +49,8 @@ jobs:
       - name: Build frontend
         run: npm run build:frontend
 
-      - name: Build Electron app
-        run: npx electron-builder --mac
+      - name: Build Electron app (ARM64)
+        run: npx electron-builder --mac --arm64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -58,8 +61,6 @@ jobs:
           files: |
             release/*.dmg
             release/*.dmg.blockmap
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload DMG as Artifact (for manual runs)
         if: github.event_name == 'workflow_dispatch'
@@ -70,9 +71,8 @@ jobs:
             release/*.dmg
           retention-days: 7
 
-  # Optional: Build for Intel Macs
   build-macos-intel:
-    runs-on: macos-15  # Intel build on macOS 15
+    runs-on: macos-13-large  # Intel runner
 
     steps:
       - name: Checkout code
@@ -106,12 +106,8 @@ jobs:
       - name: Build frontend
         run: npm run build:frontend
 
-      - name: Update electron-builder for x64
-        run: |
-          sed -i '' 's/arch:/arch: [x64]/g; s/- arm64/- x64/g' electron-builder.yml
-
-      - name: Build Electron app
-        run: npx electron-builder --mac --x64
+      - name: Build Electron app (x64)
+        run: npx electron-builder --mac --x64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -122,8 +118,6 @@ jobs:
           files: |
             release/*.dmg
             release/*.dmg.blockmap
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload DMG as Artifact (for manual runs)
         if: github.event_name == 'workflow_dispatch'
