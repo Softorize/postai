@@ -53,6 +53,20 @@ export function AuthEditor({ auth, onChange }: AuthEditorProps) {
   const handleTypeChange = (type: AuthType) => {
     if (type === 'none') {
       onChange(undefined)
+    } else if (type === 'hmac') {
+      // Initialize HMAC with defaults
+      onChange({
+        type: 'hmac',
+        hmac: {
+          algorithm: 'sha256',
+          secretKey: '',
+          signatureComponents: ['method', 'path', 'timestamp'],
+          signatureHeader: 'X-Signature',
+          timestampHeader: 'X-Timestamp',
+          nonceHeader: '',
+          encoding: 'hex',
+        }
+      })
     } else {
       onChange({ type } as AuthConfig)
     }
