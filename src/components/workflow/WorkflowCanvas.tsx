@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   ReactFlow,
   Background,
@@ -9,6 +9,7 @@ import {
   useEdgesState,
   Connection,
   Node,
+  Edge,
   NodeTypes,
   BackgroundVariant,
 } from '@xyflow/react'
@@ -33,19 +34,23 @@ interface Props {
 export function WorkflowCanvas({ onNodeSelect }: Props) {
   const { activeWorkflow, updateNodes, updateEdges, updateViewport } = useWorkflowsStore()
 
-  const initialNodes = useMemo(() => {
-    return activeWorkflow?.nodes.map(n => ({
-      ...n,
-      data: { ...n.data, label: n.data?.label || n.type }
-    })) || []
-  }, [activeWorkflow?.id])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
-  const initialEdges = useMemo(() => {
-    return activeWorkflow?.edges || []
-  }, [activeWorkflow?.id])
-
-  const [nodes, , onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  // Sync nodes and edges when activeWorkflow changes
+  useEffect(() => {
+    if (activeWorkflow) {
+      const flowNodes = activeWorkflow.nodes.map(n => ({
+        ...n,
+        data: { ...n.data, label: n.data?.label || n.type }
+      }))
+      setNodes(flowNodes)
+      setEdges(activeWorkflow.edges || [])
+    } else {
+      setNodes([])
+      setEdges([])
+    }
+  }, [activeWorkflow, setNodes, setEdges])
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -112,7 +117,7 @@ export function WorkflowCanvas({ onNodeSelect }: Props) {
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full workflow-canvas">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -127,15 +132,53 @@ export function WorkflowCanvas({ onNodeSelect }: Props) {
         snapGrid={[15, 15]}
         defaultViewport={activeWorkflow.viewport}
         onMoveEnd={(_, viewport) => updateViewport(viewport)}
+        className="bg-panel"
       >
-        <Background variant={BackgroundVariant.Dots} gap={15} size={1} />
-        <Controls />
+        <Background variant={BackgroundVariant.Dots} gap={15} size={1} color="#4a5568" />
+        <Controls className="bg-sidebar border border-border rounded-lg overflow-hidden" />
         <MiniMap
           nodeStrokeWidth={3}
           pannable
           zoomable
+          className="bg-sidebar border border-border rounded-lg"
+          maskColor="rgba(0, 0, 0, 0.7)"
+          nodeColor={(node) => {
+            switch (node.type) {
+              case 'start': return '#22c55e'
+              case 'end': return '#ef4444'
+              case 'request': return '#3b82f6'
+              case 'condition': return '#a855f7'
+              case 'delay': return '#eab308'
+              case 'variable': return '#06b6d4'
+              default: return '#6b7280'
+            }
+          }}
         />
       </ReactFlow>
+      <style>{`
+        .workflow-canvas .react-flow__controls button {
+          background: var(--color-sidebar);
+          border-bottom: 1px solid var(--color-border);
+          color: var(--color-text-primary);
+        }
+        .workflow-canvas .react-flow__controls button:hover {
+          background: var(--color-panel);
+        }
+        .workflow-canvas .react-flow__controls button svg {
+          fill: currentColor;
+        }
+        .workflow-canvas .react-flow__edge-path {
+          stroke: #6b7280;
+          stroke-width: 2;
+        }
+        .workflow-canvas .react-flow__edge.selected .react-flow__edge-path {
+          stroke: #3b82f6;
+        }
+        .workflow-canvas .react-flow__handle {
+          width: 10px;
+          height: 10px;
+        }
+      `}</style>
     </div>
   )
 }

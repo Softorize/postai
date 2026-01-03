@@ -22,6 +22,11 @@ export function MainContent() {
 
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation()
+    const tab = tabs.find(t => t.id === tabId)
+    if (tab?.isDirty) {
+      const confirmed = confirm(`"${tab.title}" has unsaved changes. Close anyway?`)
+      if (!confirmed) return
+    }
     closeTab(tabId)
   }
 
@@ -34,31 +39,35 @@ export function MainContent() {
   return (
     <div className="h-full flex flex-col bg-panel">
       {/* Tab bar */}
-      <div className="flex items-center border-b border-border bg-sidebar overflow-x-auto">
-        <div className="flex flex-1 min-w-0">
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border bg-sidebar overflow-x-auto">
+        <div className="flex flex-1 min-w-0 gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={clsx(
-                'group flex items-center gap-2 px-3 py-2 text-sm border-r border-border min-w-0 max-w-[200px] transition-colors',
+                'group flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg min-w-0 max-w-[200px] transition-all duration-150',
                 activeTabId === tab.id
-                  ? 'bg-panel text-text-primary'
+                  ? 'bg-white/10 text-text-primary shadow-sm'
                   : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
               )}
             >
               {tab.type === 'request' && tab.data && (
-                <span className={clsx('text-xs font-semibold', getMethodColor(tab))}>
+                <span className={clsx(
+                  'text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded',
+                  activeTabId === tab.id ? 'bg-black/20' : 'bg-black/10',
+                  getMethodColor(tab)
+                )}>
                   {(tab.data as { method?: string }).method || 'GET'}
                 </span>
               )}
               <span className="truncate">{tab.title}</span>
-              {tab.isDirty && <span className="text-primary-400">*</span>}
+              {tab.isDirty && <span className="text-primary-400 text-lg leading-none">•</span>}
               <button
                 onClick={(e) => handleCloseTab(e, tab.id)}
-                className="ml-auto p-0.5 hover:bg-white/10 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                className="ml-auto p-1 hover:bg-white/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </button>
           ))}
@@ -67,7 +76,7 @@ export function MainContent() {
         {/* New tab button */}
         <button
           onClick={handleNewTab}
-          className="p-2 text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors"
+          className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-white/10 rounded-lg transition-colors"
           title="New Request"
         >
           <Plus className="w-4 h-4" />
@@ -93,6 +102,9 @@ export function MainContent() {
             )}
             {activeTab.type === 'environments' && (
               <EnvironmentManager />
+            )}
+            {activeTab.type === 'environment' && (
+              <EnvironmentManager environmentId={(activeTab.data as { id: string })?.id} />
             )}
             {activeTab.type === 'ai' && (
               <div className="p-4 text-text-secondary">

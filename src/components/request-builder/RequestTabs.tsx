@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 import { KeyValuePair, RequestBody, AuthConfig } from '@/types'
 import { KeyValueEditor } from './KeyValueEditor'
+import { HeadersEditor } from './HeadersEditor'
 import { BodyEditor } from './BodyEditor'
 import { AuthEditor } from './AuthEditor'
+import { ScriptEditor } from './ScriptEditor'
 
 type TabId = 'params' | 'headers' | 'body' | 'auth' | 'pre-request' | 'tests'
 
@@ -18,10 +20,15 @@ interface RequestTabsProps {
   params: KeyValuePair[]
   body: RequestBody
   auth?: AuthConfig
+  preRequestScript: string
+  testScript: string
+  url?: string
   onHeadersChange: (headers: KeyValuePair[]) => void
   onParamsChange: (params: KeyValuePair[]) => void
   onBodyChange: (body: RequestBody) => void
   onAuthChange: (auth: AuthConfig | undefined) => void
+  onPreRequestScriptChange: (script: string) => void
+  onTestScriptChange: (script: string) => void
 }
 
 export function RequestTabs({
@@ -29,10 +36,15 @@ export function RequestTabs({
   params,
   body,
   auth,
+  preRequestScript,
+  testScript,
+  url,
   onHeadersChange,
   onParamsChange,
   onBodyChange,
   onAuthChange,
+  onPreRequestScriptChange,
+  onTestScriptChange,
 }: RequestTabsProps) {
   const [activeTab, setActiveTab] = useState<TabId>('params')
 
@@ -53,40 +65,45 @@ export function RequestTabs({
     { id: 'headers', label: 'Headers', badge: enabledHeaders || undefined },
     { id: 'body', label: 'Body', badge: hasBodyContent() ? 1 : undefined },
     { id: 'auth', label: 'Auth', badge: auth?.type !== 'none' ? 1 : undefined },
-    { id: 'pre-request', label: 'Pre-request' },
-    { id: 'tests', label: 'Tests' },
+    { id: 'pre-request', label: 'Pre-request', badge: preRequestScript?.trim() ? 1 : undefined },
+    { id: 'tests', label: 'Tests', badge: testScript?.trim() ? 1 : undefined },
   ]
 
   return (
     <div className="h-full flex flex-col">
       {/* Tab bar */}
-      <div className="flex border-b border-border bg-sidebar">
+      <div className="flex gap-1 px-3 py-2 border-b border-border bg-sidebar">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={clsx(
-              'px-4 py-2 text-sm font-medium transition-colors relative',
+              'px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-150 flex items-center gap-1.5',
               activeTab === tab.id
-                ? 'text-text-primary'
-                : 'text-text-secondary hover:text-text-primary'
+                ? 'bg-white/10 text-text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
             )}
           >
             <span>{tab.label}</span>
-            {tab.badge && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-primary-500/20 text-primary-400 rounded">
+            {tab.badge !== undefined && (
+              <span className={clsx(
+                'min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-semibold rounded-full',
+                activeTab === tab.id
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-white/10 text-text-secondary'
+              )}>
                 {tab.badge}
               </span>
-            )}
-            {activeTab === tab.id && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
             )}
           </button>
         ))}
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className={clsx(
+        'flex-1 overflow-auto',
+        activeTab !== 'pre-request' && activeTab !== 'tests' && 'p-4'
+      )}>
         {activeTab === 'params' && (
           <KeyValueEditor
             items={params}
@@ -97,11 +114,10 @@ export function RequestTabs({
         )}
 
         {activeTab === 'headers' && (
-          <KeyValueEditor
+          <HeadersEditor
             items={headers}
             onChange={onHeadersChange}
-            keyPlaceholder="Header name"
-            valuePlaceholder="Header value"
+            url={url}
           />
         )}
 
@@ -110,15 +126,19 @@ export function RequestTabs({
         {activeTab === 'auth' && <AuthEditor auth={auth} onChange={onAuthChange} />}
 
         {activeTab === 'pre-request' && (
-          <div className="text-text-secondary text-sm">
-            Pre-request scripts coming soon...
-          </div>
+          <ScriptEditor
+            value={preRequestScript}
+            onChange={onPreRequestScriptChange}
+            type="pre-request"
+          />
         )}
 
         {activeTab === 'tests' && (
-          <div className="text-text-secondary text-sm">
-            Test scripts coming soon...
-          </div>
+          <ScriptEditor
+            value={testScript}
+            onChange={onTestScriptChange}
+            type="tests"
+          />
         )}
       </div>
     </div>

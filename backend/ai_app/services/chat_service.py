@@ -1,5 +1,6 @@
 """AI chat service for PostAI."""
 from typing import AsyncGenerator, Optional, Dict, Any
+from asgiref.sync import sync_to_async
 from ..providers import get_provider, ChatMessage
 from ..models import AiProvider, AiConversation, AiMessage
 
@@ -36,8 +37,8 @@ async def chat(
     Returns:
         The assistant's response (or async generator if streaming)
     """
-    conversation = AiConversation.objects.get(id=conversation_id)
-    provider_config = AiProvider.objects.get(id=provider_id)
+    conversation = await sync_to_async(AiConversation.objects.get)(id=conversation_id)
+    provider_config = await sync_to_async(AiProvider.objects.get)(id=provider_id)
     provider = get_provider(
         provider_config.provider_type,
         provider_config.api_key,
@@ -58,7 +59,7 @@ async def chat(
             ))
 
     # Add conversation history (last 20 messages to avoid token limits)
-    history = conversation.messages.order_by('created_at')[:20]
+    history = await sync_to_async(list)(conversation.messages.order_by('created_at')[:20])
     for msg in history:
         messages.append(ChatMessage(role=msg.role, content=msg.content))
 
@@ -66,7 +67,7 @@ async def chat(
     messages.append(ChatMessage(role='user', content=user_message))
 
     # Save user message
-    AiMessage.objects.create(
+    await sync_to_async(AiMessage.objects.create)(
         conversation=conversation,
         role='user',
         content=user_message
@@ -86,7 +87,7 @@ async def chat(
         )
 
         # Save assistant response
-        AiMessage.objects.create(
+        await sync_to_async(AiMessage.objects.create)(
             conversation=conversation,
             role='assistant',
             content=response.content,
@@ -110,7 +111,7 @@ async def _stream_response(
         yield chunk
 
     # Save complete response
-    AiMessage.objects.create(
+    await sync_to_async(AiMessage.objects.create)(
         conversation=conversation,
         role='assistant',
         content=''.join(full_response)
@@ -150,7 +151,7 @@ async def create_conversation(
     context: Optional[Dict[str, Any]] = None
 ) -> AiConversation:
     """Create a new AI conversation."""
-    return AiConversation.objects.create(
+    return await sync_to_async(AiConversation.objects.create)(
         title=title,
         provider_id=provider_id,
         context=context or {}
@@ -162,6 +163,6 @@ async def update_conversation_context(
     context: Dict[str, Any]
 ) -> None:
     """Update the context for a conversation."""
-    conversation = AiConversation.objects.get(id=conversation_id)
+    conversation = await sync_to_async(AiConversation.objects.get)(id=conversation_id)
     conversation.context = context
-    conversation.save()
+    await sync_to_async(conversation.save)()

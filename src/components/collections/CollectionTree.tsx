@@ -1,27 +1,61 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   ChevronRight,
   ChevronDown,
   Folder,
   FolderOpen,
   MoreHorizontal,
+  Trash2,
+  FolderPlus,
+  FilePlus,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useCollectionsStore } from '@/stores/collections.store'
 import { useTabsStore } from '@/stores/tabs.store'
 import { Collection, Folder as FolderType, Request, HttpMethod } from '@/types'
+import { InputDialog } from '../common/InputDialog'
 
 interface CollectionTreeProps {
   searchQuery: string
+}
+
+// Helper function to check if a folder or its contents match the search
+function folderMatchesSearch(folder: FolderType, query: string): boolean {
+  const lowerQuery = query.toLowerCase()
+
+  // Check folder name
+  if (folder.name.toLowerCase().includes(lowerQuery)) return true
+
+  // Check requests in folder
+  if (folder.requests?.some(r => r.name.toLowerCase().includes(lowerQuery))) return true
+
+  // Check subfolders recursively
+  if (folder.subfolders?.some(sf => folderMatchesSearch(sf, query))) return true
+
+  return false
+}
+
+// Helper function to check if a collection or its contents match the search
+function collectionMatchesSearch(collection: Collection, query: string): boolean {
+  const lowerQuery = query.toLowerCase()
+
+  // Check collection name
+  if (collection.name.toLowerCase().includes(lowerQuery)) return true
+
+  // Check root-level requests
+  if (collection.requests?.some(r => !r.folder && r.name.toLowerCase().includes(lowerQuery))) return true
+
+  // Check folders
+  if (collection.folders?.some(f => folderMatchesSearch(f, query))) return true
+
+  return false
 }
 
 export function CollectionTree({ searchQuery }: CollectionTreeProps) {
   const { collections, isLoading } = useCollectionsStore()
 
   const filteredCollections = searchQuery
-    ? collections.filter((c) =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? collections.filter((c) => collectionMatchesSearch(c, searchQuery))
     : collections
 
   if (isLoading) {
@@ -35,7 +69,7 @@ export function CollectionTree({ searchQuery }: CollectionTreeProps) {
   if (filteredCollections.length === 0) {
     return (
       <div className="p-4 text-text-secondary text-sm text-center">
-        {searchQuery ? 'No collections found' : 'No collections yet'}
+        {searchQuery ? 'No matches found' : 'No collections yet'}
       </div>
     )
   }
@@ -43,17 +77,90 @@ export function CollectionTree({ searchQuery }: CollectionTreeProps) {
   return (
     <div className="py-1">
       {filteredCollections.map((collection) => (
-        <CollectionItem key={collection.id} collection={collection} />
+        <CollectionItem key={collection.id} collection={collection} searchQuery={searchQuery} />
       ))}
     </div>
   )
 }
 
-function CollectionItem({ collection }: { collection: Collection }) {
+function CollectionItem({ collection, searchQuery }: { collection: Collection; searchQuery: string }) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+  const [showFolderDialog, setShowFolderDialog] = useState(false)
+  const [showRequestDialog, setShowRequestDialog] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const { deleteCollection, createFolder, createRequest } = useCollectionsStore()
+  const { openTab } = useTabsStore()
+
+  // Auto-expand when searching and this collection has matches
+  const shouldAutoExpand = searchQuery && collectionMatchesSearch(collection, searchQuery)
+
+  useEffect(() => {
+    if (shouldAutoExpand) {
+      setIsExpanded(true)
+    }
+  }, [shouldAutoExpand])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showMenu])
+
+  const handleDelete = async () => {
+    if (confirm(`Delete collection "${collection.name}" and all its contents?`)) {
+      await deleteCollection(collection.id)
+    }
+    setShowMenu(false)
+  }
+
+  const handleAddFolder = () => {
+    setShowMenu(false)
+    setShowFolderDialog(true)
+  }
+
+  const handleConfirmAddFolder = async (name: string) => {
+    try {
+      await createFolder(collection.id, name)
+      setIsExpanded(true)
+      setShowFolderDialog(false)
+    } catch (error) {
+      console.error('Failed to create folder:', error)
+      setShowFolderDialog(false)
+    }
+  }
+
+  const handleAddRequest = () => {
+    setShowMenu(false)
+    setShowRequestDialog(true)
+  }
+
+  const handleConfirmAddRequest = async (name: string) => {
+    try {
+      const newRequest = await createRequest(collection.id, { name, method: 'GET', url: '' })
+      setIsExpanded(true)
+      setShowRequestDialog(false)
+      // Open the new request in a tab
+      openTab({
+        type: 'request',
+        title: newRequest.name,
+        data: newRequest,
+      })
+    } catch (error) {
+      console.error('Failed to create request:', error)
+      setShowRequestDialog(false)
+    }
+  }
 
   return (
-    <div>
+    <div className="relative">
       <div
         className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/5 cursor-pointer group"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -75,36 +182,101 @@ function CollectionItem({ collection }: { collection: Collection }) {
           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-white/10 rounded"
           onClick={(e) => {
             e.stopPropagation()
-            // TODO: Show context menu
+            setShowMenu(!showMenu)
           }}
         >
           <MoreHorizontal className="w-3.5 h-3.5 text-text-secondary" />
         </button>
       </div>
 
+      {/* Dropdown Menu */}
+      {showMenu && (
+        <div
+          ref={menuRef}
+          className="absolute right-2 top-8 bg-sidebar border border-border rounded-lg shadow-xl z-50 overflow-hidden min-w-[140px]"
+        >
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleAddFolder()
+            }}
+          >
+            <FolderPlus className="w-4 h-4" />
+            Add Folder
+          </button>
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleAddRequest()
+            }}
+          >
+            <FilePlus className="w-4 h-4" />
+            Add Request
+          </button>
+          <div className="border-t border-border" />
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left text-red-400"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDelete()
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        </div>
+      )}
+
       {isExpanded && (
         <div className="ml-4">
-          {/* Folders */}
-          {collection.folders?.map((folder) => (
-            <FolderItem
-              key={folder.id}
-              folder={folder}
-              collectionId={collection.id}
-            />
-          ))}
+          {/* Folders - filter by search if active */}
+          {collection.folders
+            ?.filter(f => !searchQuery || folderMatchesSearch(f, searchQuery))
+            .map((folder) => (
+              <FolderItem
+                key={folder.id}
+                folder={folder}
+                collectionId={collection.id}
+                searchQuery={searchQuery}
+              />
+            ))}
 
-          {/* Root-level requests */}
+          {/* Root-level requests - filter by search if active */}
           {collection.requests
             ?.filter((r) => !r.folder)
+            .filter(r => !searchQuery || r.name.toLowerCase().includes(searchQuery.toLowerCase()))
             .map((request) => (
               <RequestItem
                 key={request.id}
                 request={request}
                 collectionId={collection.id}
+                searchQuery={searchQuery}
               />
             ))}
         </div>
       )}
+
+      {/* Add Folder Dialog */}
+      <InputDialog
+        isOpen={showFolderDialog}
+        title="New Folder"
+        placeholder="Folder name..."
+        confirmText="Create"
+        onConfirm={handleConfirmAddFolder}
+        onCancel={() => setShowFolderDialog(false)}
+      />
+
+      {/* Add Request Dialog */}
+      <InputDialog
+        isOpen={showRequestDialog}
+        title="New Request"
+        placeholder="Request name..."
+        confirmText="Create"
+        onConfirm={handleConfirmAddRequest}
+        onCancel={() => setShowRequestDialog(false)}
+      />
     </div>
   )
 }
@@ -112,14 +284,72 @@ function CollectionItem({ collection }: { collection: Collection }) {
 function FolderItem({
   folder,
   collectionId,
+  searchQuery,
 }: {
   folder: FolderType
   collectionId: string
+  searchQuery: string
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+  const [showRequestDialog, setShowRequestDialog] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const { deleteFolder, createRequest } = useCollectionsStore()
+  const { openTab } = useTabsStore()
+
+  // Auto-expand when searching and this folder has matches
+  const shouldAutoExpand = searchQuery && folderMatchesSearch(folder, searchQuery)
+
+  useEffect(() => {
+    if (shouldAutoExpand) {
+      setIsExpanded(true)
+    }
+  }, [shouldAutoExpand])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showMenu])
+
+  const handleDelete = async () => {
+    if (confirm(`Delete folder "${folder.name}" and all its contents?`)) {
+      await deleteFolder(collectionId, folder.id)
+    }
+    setShowMenu(false)
+  }
+
+  const handleAddRequest = () => {
+    setShowMenu(false)
+    setShowRequestDialog(true)
+  }
+
+  const handleConfirmAddRequest = async (name: string) => {
+    try {
+      const newRequest = await createRequest(collectionId, { name, method: 'GET', url: '', folder: folder.id })
+      setIsExpanded(true)
+      setShowRequestDialog(false)
+      // Open the new request in a tab
+      openTab({
+        type: 'request',
+        title: newRequest.name,
+        data: newRequest,
+      })
+    } catch (error) {
+      console.error('Failed to create request:', error)
+      setShowRequestDialog(false)
+    }
+  }
 
   return (
-    <div>
+    <div className="relative">
       <div
         className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/5 cursor-pointer group"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -137,40 +367,114 @@ function FolderItem({
           <Folder className="w-4 h-4 text-blue-400" />
         )}
         <span className="flex-1 text-sm truncate">{folder.name}</span>
+        <button
+          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-white/10 rounded"
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowMenu(!showMenu)
+          }}
+        >
+          <MoreHorizontal className="w-3.5 h-3.5 text-text-secondary" />
+        </button>
       </div>
+
+      {/* Dropdown Menu */}
+      {showMenu && (
+        <div
+          ref={menuRef}
+          className="absolute right-2 top-8 bg-sidebar border border-border rounded-lg shadow-xl z-50 overflow-hidden min-w-[140px]"
+        >
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleAddRequest()
+            }}
+          >
+            <FilePlus className="w-4 h-4" />
+            Add Request
+          </button>
+          <div className="border-t border-border" />
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left text-red-400"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDelete()
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        </div>
+      )}
 
       {isExpanded && (
         <div className="ml-4">
-          {/* Subfolders */}
-          {folder.subfolders?.map((subfolder) => (
-            <FolderItem
-              key={subfolder.id}
-              folder={subfolder}
-              collectionId={collectionId}
-            />
-          ))}
+          {/* Subfolders - filter by search if active */}
+          {folder.subfolders
+            ?.filter(sf => !searchQuery || folderMatchesSearch(sf, searchQuery))
+            .map((subfolder) => (
+              <FolderItem
+                key={subfolder.id}
+                folder={subfolder}
+                collectionId={collectionId}
+                searchQuery={searchQuery}
+              />
+            ))}
 
-          {/* Requests in folder */}
-          {folder.requests?.map((request) => (
-            <RequestItem
-              key={request.id}
-              request={request}
-              collectionId={collectionId}
-            />
-          ))}
+          {/* Requests in folder - filter by search if active */}
+          {folder.requests
+            ?.filter(r => !searchQuery || r.name.toLowerCase().includes(searchQuery.toLowerCase()))
+            .map((request) => (
+              <RequestItem
+                key={request.id}
+                request={request}
+                collectionId={collectionId}
+                searchQuery={searchQuery}
+              />
+            ))}
         </div>
       )}
+
+      {/* Add Request Dialog */}
+      <InputDialog
+        isOpen={showRequestDialog}
+        title="New Request"
+        placeholder="Request name..."
+        confirmText="Create"
+        onConfirm={handleConfirmAddRequest}
+        onCancel={() => setShowRequestDialog(false)}
+      />
     </div>
   )
 }
 
 function RequestItem({
   request,
+  collectionId,
+  searchQuery: _searchQuery,
 }: {
   request: Request
   collectionId: string
+  searchQuery: string
 }) {
   const { openTab } = useTabsStore()
+  const { deleteRequest } = useCollectionsStore()
+  const [showMenu, setShowMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showMenu])
 
   const handleClick = () => {
     openTab({
@@ -178,6 +482,13 @@ function RequestItem({
       title: request.name,
       data: request,
     })
+  }
+
+  const handleDelete = async () => {
+    if (confirm(`Delete request "${request.name}"?`)) {
+      await deleteRequest(collectionId, request.id)
+    }
+    setShowMenu(false)
   }
 
   const methodColors: Record<HttpMethod, string> = {
@@ -191,28 +502,49 @@ function RequestItem({
   }
 
   return (
-    <div
-      className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 cursor-pointer group"
-      onClick={handleClick}
-    >
-      <span
-        className={clsx(
-          'text-[10px] font-bold w-10 text-center',
-          methodColors[request.method]
-        )}
+    <div className="relative">
+      <div
+        className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 cursor-pointer group"
+        onClick={handleClick}
       >
-        {request.method}
-      </span>
-      <span className="flex-1 text-sm truncate">{request.name}</span>
-      <button
-        className="p-1 opacity-0 group-hover:opacity-100 hover:bg-white/10 rounded"
-        onClick={(e) => {
-          e.stopPropagation()
-          // TODO: Show context menu
-        }}
-      >
-        <MoreHorizontal className="w-3.5 h-3.5 text-text-secondary" />
-      </button>
+        <span
+          className={clsx(
+            'text-[10px] font-bold w-10 text-center',
+            methodColors[request.method]
+          )}
+        >
+          {request.method}
+        </span>
+        <span className="flex-1 text-sm truncate">{request.name}</span>
+        <button
+          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-white/10 rounded"
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowMenu(!showMenu)
+          }}
+        >
+          <MoreHorizontal className="w-3.5 h-3.5 text-text-secondary" />
+        </button>
+      </div>
+
+      {/* Dropdown Menu */}
+      {showMenu && (
+        <div
+          ref={menuRef}
+          className="absolute right-2 top-8 bg-sidebar border border-border rounded-lg shadow-xl z-50 overflow-hidden min-w-[120px]"
+        >
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left text-red-400"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDelete()
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 }

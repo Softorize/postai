@@ -4,6 +4,7 @@ import {
   Send, GitBranch, Clock, Variable, AlertCircle
 } from 'lucide-react'
 import { useWorkflowsStore } from '../../stores/workflows.store'
+import { useEnvironmentsStore } from '../../stores/environments.store'
 import { WorkflowCanvas } from './WorkflowCanvas'
 import { NodePropertiesPanel } from './NodePropertiesPanel'
 import { cn } from '../../lib/utils'
@@ -33,13 +34,25 @@ export function WorkflowBuilder() {
     setError
   } = useWorkflowsStore()
 
+  const { activeEnvironment, fetchEnvironments } = useEnvironmentsStore()
+
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [showNewDialog, setShowNewDialog] = useState(false)
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [executionResult, setExecutionResult] = useState<any>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Auto-hide toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
 
   useEffect(() => {
     fetchWorkflows()
+    fetchEnvironments()
   }, [])
 
   useEffect(() => {
@@ -75,7 +88,7 @@ export function WorkflowBuilder() {
     if (!activeWorkflowId) return
 
     try {
-      const result = await executeWorkflow(activeWorkflowId)
+      const result = await executeWorkflow(activeWorkflowId, {}, activeEnvironment?.id)
       setExecutionResult(result)
     } catch (err) {
       // Error handled in store
@@ -126,7 +139,14 @@ export function WorkflowBuilder() {
             </button>
 
             <button
-              onClick={() => duplicateWorkflow(activeWorkflowId!)}
+              onClick={async () => {
+                try {
+                  const newWorkflow = await duplicateWorkflow(activeWorkflowId!)
+                  setToast({ message: `Copied! Now editing "${newWorkflow.name}"`, type: 'success' })
+                } catch {
+                  setToast({ message: 'Failed to duplicate workflow', type: 'error' })
+                }
+              }}
               className="p-1.5 hover:bg-muted rounded"
               title="Duplicate"
             >
@@ -181,7 +201,7 @@ export function WorkflowBuilder() {
 
             {/* Execution result panel */}
             {executionResult && (
-              <div className="w-80 border-l border-border overflow-y-auto bg-muted/30">
+              <div className="w-96 border-l border-border overflow-y-auto bg-muted/30">
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-medium">Execution Result</h3>
@@ -195,36 +215,134 @@ export function WorkflowBuilder() {
 
                   <div className={cn(
                     'px-3 py-2 rounded mb-4',
-                    executionResult.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    executionResult.success ? 'bg-green-900/50 text-green-300 border border-green-700' : 'bg-red-900/50 text-red-300 border border-red-700'
                   )}>
-                    {executionResult.success ? 'Completed' : 'Failed'}
+                    <span className="font-medium">{executionResult.success ? '✓ Completed' : '✗ Failed'}</span>
                     {executionResult.error && (
-                      <p className="text-xs mt-1">{executionResult.error}</p>
+                      <p className="text-xs mt-1 text-red-400">{executionResult.error}</p>
                     )}
                   </div>
 
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Execution Log</h4>
-                    {executionResult.execution_log?.map((log: any, i: number) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          'p-2 rounded text-xs',
-                          log.success ? 'bg-green-50' : 'bg-red-50'
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{log.node_type}</span>
-                          <span className="text-muted-foreground">
-                            {log.execution_time_ms}ms
-                          </span>
+                  {/* Final Result - from End node */}
+                  {(() => {
+                    const endLog = executionResult.execution_log?.find((log: any) => log.node_type === 'end')
+                    const finalResult = endLog?.output?.result
+                    const resultLabel = endLog?.output?.result_label || 'Result'
+
+                    if (finalResult !== undefined) {
+                      // Try to parse and format JSON
+                      let formattedResult = finalResult
+                      let isJson = false
+                      if (typeof finalResult === 'string') {
+                        try {
+                          formattedResult = JSON.parse(finalResult)
+                          isJson = true
+                        } catch {
+                          // Not JSON, keep as string
+                        }
+                      } else if (typeof finalResult === 'object') {
+                        isJson = true
+                      }
+
+                      return (
+                        <div className="mb-4 border border-primary/50 rounded-lg overflow-hidden">
+                          <div className="px-3 py-2 bg-primary/20 border-b border-primary/30 flex items-center justify-between">
+                            <span className="text-sm font-medium text-primary">{resultLabel}</span>
+                            {isJson && (
+                              <button
+                                onClick={() => {
+                                  const text = typeof formattedResult === 'string'
+                                    ? formattedResult
+                                    : JSON.stringify(formattedResult, null, 2)
+                                  navigator.clipboard.writeText(text)
+                                }}
+                                className="text-xs text-primary/70 hover:text-primary"
+                              >
+                                Copy
+                              </button>
+                            )}
+                          </div>
+                          <pre className="p-3 text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto bg-black/20">
+                            {isJson
+                              ? JSON.stringify(formattedResult, null, 2)
+                              : String(finalResult)}
+                          </pre>
                         </div>
-                        {log.error && (
-                          <p className="text-red-600 mt-1">{log.error}</p>
-                        )}
+                      )
+                    }
+                    return null
+                  })()}
+
+                  <details className="mb-4" open={!executionResult.execution_log?.find((log: any) => log.node_type === 'end')?.output?.result}>
+                    <summary className="text-sm font-medium cursor-pointer hover:text-foreground">
+                      Execution Log
+                    </summary>
+                    <div className="space-y-2 mt-2">
+                      {executionResult.execution_log?.map((log: any, i: number) => (
+                        <details
+                          key={i}
+                          className={cn(
+                            'rounded text-xs border',
+                            log.success ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'
+                          )}
+                        >
+                          <summary className="p-2 cursor-pointer hover:bg-white/5">
+                            <div className="inline-flex items-center justify-between w-[calc(100%-20px)]">
+                              <span className={cn(
+                                'font-medium',
+                                log.success ? 'text-green-400' : 'text-red-400'
+                              )}>
+                                {log.node_type}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {log.execution_time_ms}ms
+                              </span>
+                            </div>
+                          </summary>
+                          <div className="px-2 pb-2 border-t border-white/10 mt-1 pt-2">
+                            {log.error && (
+                              <p className="text-red-400 mb-2">{log.error}</p>
+                            )}
+                            {log.output && (
+                              <div>
+                                <span className="text-muted-foreground">Output:</span>
+                                <pre className="mt-1 p-2 bg-black/30 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto">
+                                  {typeof log.output === 'string'
+                                    ? log.output
+                                    : JSON.stringify(log.output, null, 2)}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  </details>
+
+                  {/* Output Variables */}
+                  {executionResult.output_variables && Object.keys(executionResult.output_variables).length > 0 && (
+                    <details className="border-t border-border pt-4">
+                      <summary className="text-sm font-medium cursor-pointer hover:text-foreground mb-2">
+                        Output Variables ({Object.keys(executionResult.output_variables).length})
+                      </summary>
+                      <div className="space-y-2 mt-2">
+                        {Object.entries(executionResult.output_variables).map(([key, value]: [string, any]) => (
+                          <details key={key} className="bg-cyan-900/20 border border-cyan-800 rounded text-xs">
+                            <summary className="p-2 cursor-pointer hover:bg-white/5">
+                              <span className="font-medium text-cyan-400">{key}</span>
+                            </summary>
+                            <div className="px-2 pb-2 border-t border-white/10 mt-1 pt-2">
+                              <pre className="p-2 bg-black/30 rounded text-xs overflow-x-auto max-h-60 overflow-y-auto">
+                                {typeof value === 'string'
+                                  ? value
+                                  : JSON.stringify(value, null, 2)}
+                              </pre>
+                            </div>
+                          </details>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </details>
+                  )}
                 </div>
               </div>
             )}
@@ -281,6 +399,31 @@ export function WorkflowBuilder() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={cn(
+            'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-top-2 duration-200',
+            toast.type === 'success'
+              ? 'bg-green-900/90 border border-green-700 text-green-100'
+              : 'bg-red-900/90 border border-red-700 text-red-100'
+          )}
+        >
+          {toast.type === 'success' ? (
+            <Copy className="h-4 w-4" />
+          ) : (
+            <AlertCircle className="h-4 w-4" />
+          )}
+          <span className="text-sm font-medium">{toast.message}</span>
+          <button
+            onClick={() => setToast(null)}
+            className="ml-2 text-white/60 hover:text-white"
+          >
+            ×
+          </button>
         </div>
       )}
 

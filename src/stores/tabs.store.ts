@@ -1,14 +1,27 @@
 import { create } from 'zustand'
-import { Request, Workflow } from '@/types'
+import { Request, Workflow, Environment, HttpMethod, KeyValuePair, RequestBody, AuthConfig } from '@/types'
 
-export type TabType = 'request' | 'workflow' | 'mcp' | 'ai' | 'environments'
+export type TabType = 'request' | 'workflow' | 'mcp' | 'ai' | 'environments' | 'environment'
+
+// Draft data for unsaved request changes
+export interface RequestDraft {
+  method: HttpMethod
+  url: string
+  headers: KeyValuePair[]
+  params: KeyValuePair[]
+  body: RequestBody
+  auth?: AuthConfig
+  preRequestScript?: string
+  testScript?: string
+}
 
 export interface Tab {
   id: string
   type: TabType
   title: string
-  data?: Request | Workflow | null
+  data?: Request | Workflow | Environment | null
   isDirty?: boolean
+  draft?: RequestDraft  // Store unsaved changes
 }
 
 interface TabsState {

@@ -12,14 +12,11 @@ files:
   - package.json
 
 extraResources:
-  - from: backend
-    to: backend
+  # Bundled PyInstaller server (self-contained, no Python required)
+  - from: backend/dist/postai-server
+    to: postai-server
     filter:
       - "**/*"
-      - "!**/__pycache__"
-      - "!**/*.pyc"
-      - "!**/.venv"
-      - "!**/db.sqlite3"
 
 mac:
   category: public.app-category.developer-tools
@@ -36,6 +33,7 @@ mac:
   identity: null
 
 dmg:
+  icon: resources/icon.icns
   background: resources/dmg-background.png
   iconSize: 100
   contents:

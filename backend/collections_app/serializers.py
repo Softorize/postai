@@ -14,7 +14,21 @@ class RequestSerializer(serializers.ModelSerializer):
             'pre_request_script', 'test_script', 'order',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'collection', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'name': {'required': False},
+            'description': {'required': False},
+            'method': {'required': False},
+            'url': {'required': False, 'allow_blank': True},
+            'headers': {'required': False},
+            'params': {'required': False},
+            'body': {'required': False},
+            'auth': {'required': False},
+            'folder': {'required': False},
+            'pre_request_script': {'required': False},
+            'test_script': {'required': False},
+            'order': {'required': False},
+        }
 
 
 class FolderSerializer(serializers.ModelSerializer):
@@ -29,7 +43,7 @@ class FolderSerializer(serializers.ModelSerializer):
             'auth', 'pre_request_script', 'test_script', 'order',
             'requests', 'subfolders', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'collection', 'created_at', 'updated_at']
 
     def get_subfolders(self, obj):
         """Recursively get subfolders."""

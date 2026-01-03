@@ -2,22 +2,84 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 import { RequestBody } from '@/types'
 import { KeyValueEditor } from './KeyValueEditor'
+import { VariablePopover } from '../common/VariablePopover'
 
 type BodyMode = 'none' | 'raw' | 'formdata' | 'urlencoded' | 'graphql' | 'binary'
 type RawLanguage = 'json' | 'xml' | 'text' | 'javascript' | 'html'
 
-// JSON syntax highlighter
-function highlightJson(json: string): React.ReactNode[] {
+// Highlight environment variables in a string
+function highlightEnvVars(
+  text: string,
+  keyIndex: { current: number },
+  baseClass: string,
+  onVariableClick?: (varName: string, rect: DOMRect) => void
+): React.ReactNode[] {
   const tokens: React.ReactNode[] = []
-  let i = 0
-  let keyIndex = 0
+  const envVarPattern = /(\{\{([^}]+)\}\})/g
+  let lastIndex = 0
+  let match
 
-  const addToken = (text: string, className: string) => {
+  while ((match = envVarPattern.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      tokens.push(
+        <span key={keyIndex.current++} className={baseClass}>
+          {text.slice(lastIndex, match.index)}
+        </span>
+      )
+    }
+    // Add the env variable with orange highlighting - clickable
+    const varName = match[2].trim()
     tokens.push(
-      <span key={keyIndex++} className={className}>
-        {text}
+      <span
+        key={keyIndex.current++}
+        className="text-orange-400 bg-orange-400/10 rounded px-0.5 cursor-pointer hover:bg-orange-400/20 pointer-events-auto"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (onVariableClick) {
+            const rect = (e.target as HTMLElement).getBoundingClientRect()
+            onVariableClick(varName, rect)
+          }
+        }}
+      >
+        {match[1]}
       </span>
     )
+    lastIndex = match.index + match[0].length
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    tokens.push(
+      <span key={keyIndex.current++} className={baseClass}>
+        {text.slice(lastIndex)}
+      </span>
+    )
+  }
+
+  return tokens
+}
+
+// JSON syntax highlighter with environment variable support
+function highlightJson(
+  json: string,
+  onVariableClick?: (varName: string, rect: DOMRect) => void
+): React.ReactNode[] {
+  const tokens: React.ReactNode[] = []
+  let i = 0
+  const keyIndex = { current: 0 }
+
+  const addToken = (text: string, className: string) => {
+    // Check if text contains env variables
+    if (text.includes('{{')) {
+      tokens.push(...highlightEnvVars(text, keyIndex, className, onVariableClick))
+    } else {
+      tokens.push(
+        <span key={keyIndex.current++} className={className}>
+          {text}
+        </span>
+      )
+    }
   }
 
   while (i < json.length) {
@@ -30,7 +92,7 @@ function highlightJson(json: string): React.ReactNode[] {
         whitespace += json[i]
         i++
       }
-      tokens.push(<span key={keyIndex++}>{whitespace}</span>)
+      tokens.push(<span key={keyIndex.current++}>{whitespace}</span>)
       continue
     }
 
@@ -104,7 +166,7 @@ function highlightJson(json: string): React.ReactNode[] {
     }
 
     // Any other character
-    tokens.push(<span key={keyIndex++}>{char}</span>)
+    tokens.push(<span key={keyIndex.current++}>{char}</span>)
     i++
   }
 
@@ -118,6 +180,18 @@ interface BodyEditorProps {
 
 export function BodyEditor({ body, onChange }: BodyEditorProps) {
   const [mode, setMode] = useState<BodyMode>((body.mode as BodyMode) || 'none')
+  const [popoverVariable, setPopoverVariable] = useState<string | null>(null)
+  const [popoverRect, setPopoverRect] = useState<DOMRect | null>(null)
+
+  const handleVariableClick = (varName: string, rect: DOMRect) => {
+    setPopoverVariable(varName)
+    setPopoverRect(rect)
+  }
+
+  const handleClosePopover = () => {
+    setPopoverVariable(null)
+    setPopoverRect(null)
+  }
 
   const handleModeChange = (newMode: BodyMode) => {
     setMode(newMode)
@@ -188,12 +262,6 @@ export function BodyEditor({ body, onChange }: BodyEditorProps) {
 
       {mode === 'raw' && (
         <div className="relative">
-          {/* Syntax highlighted overlay for JSON */}
-          {body.language === 'json' && body.raw && (
-            <pre className="absolute inset-0 px-4 py-3 bg-sidebar border border-transparent rounded-lg text-sm font-mono overflow-hidden pointer-events-none whitespace-pre-wrap break-all">
-              {highlightJson(body.raw)}
-            </pre>
-          )}
           <textarea
             value={body.raw || ''}
             onChange={(e) => onChange({ ...body, raw: e.target.value })}
@@ -204,9 +272,15 @@ export function BodyEditor({ body, onChange }: BodyEditorProps) {
             }
             className={clsx(
               'w-full h-64 px-4 py-3 bg-sidebar border border-border rounded-lg text-sm font-mono resize-none focus:border-primary-500',
-              body.language === 'json' && body.raw ? 'text-transparent caret-white selection:bg-primary-500/40 selection:text-white' : ''
+              body.language === 'json' && body.raw ? 'json-editor-textarea' : ''
             )}
           />
+          {/* Syntax highlighted overlay for JSON - variables are clickable */}
+          {body.language === 'json' && body.raw && (
+            <pre className="absolute inset-0 px-4 py-3 bg-transparent border border-transparent rounded-lg text-sm font-mono overflow-hidden pointer-events-none whitespace-pre-wrap break-all">
+              {highlightJson(body.raw, handleVariableClick)}
+            </pre>
+          )}
           {body.language === 'json' && (
             <button
               onClick={() => {
@@ -217,10 +291,18 @@ export function BodyEditor({ body, onChange }: BodyEditorProps) {
                   // Invalid JSON, ignore
                 }
               }}
-              className="absolute top-2 right-2 px-2 py-1 text-xs bg-white/5 hover:bg-white/10 rounded"
+              className="absolute top-2 right-2 px-2 py-1 text-xs bg-white/5 hover:bg-white/10 rounded z-20"
             >
               Format
             </button>
+          )}
+          {/* Variable popover */}
+          {popoverVariable && (
+            <VariablePopover
+              variableName={popoverVariable}
+              anchorRect={popoverRect}
+              onClose={handleClosePopover}
+            />
           )}
         </div>
       )}

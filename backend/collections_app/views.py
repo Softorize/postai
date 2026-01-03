@@ -4,6 +4,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.models import Workspace
 from .models import Collection, Folder, Request
 from .serializers import (
     CollectionSerializer,
@@ -19,10 +20,23 @@ class CollectionViewSet(viewsets.ModelViewSet):
     queryset = Collection.objects.all()
     serializer_class = CollectionSerializer
 
+    def get_queryset(self):
+        """Filter collections by workspace if specified."""
+        queryset = Collection.objects.all()
+        workspace_id = self.request.query_params.get('workspace')
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        return queryset
+
     def get_serializer_class(self):
         if self.action == 'create':
             return CollectionCreateSerializer
         return CollectionSerializer
+
+    def perform_create(self, serializer):
+        """Assign collection to active workspace."""
+        workspace = Workspace.get_or_create_default()
+        serializer.save(workspace=workspace)
 
     @action(detail=False, methods=['post'], url_path='import')
     def import_collection(self, request):

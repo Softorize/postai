@@ -1,6 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron'
 import path from 'path'
-import { DjangoManager } from './services/django-manager'
+import { DjangoManager, PythonNotFoundError } from './services/django-manager'
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 // Only load on Windows platform
@@ -66,10 +66,26 @@ async function startDjango() {
     console.log('Django server started successfully')
   } catch (error) {
     console.error('Failed to start Django server:', error)
-    dialog.showErrorBox(
-      'Backend Error',
-      'Failed to start the backend server. Please check the logs and try again.'
-    )
+
+    if (error instanceof PythonNotFoundError) {
+      const searchedPaths = error.searchedPaths.slice(0, 10).join('\n  • ')
+      dialog.showErrorBox(
+        'Python 3.13 Required',
+        `PostAI requires Python ${error.requiredVersion} to run the backend server.\n\n` +
+        `Searched locations:\n  • ${searchedPaths}\n\n` +
+        `Please install Python ${error.requiredVersion} using one of these methods:\n\n` +
+        `• pyenv: pyenv install 3.13.0\n` +
+        `• Homebrew: brew install python@3.13\n` +
+        `• python.org: Download from https://www.python.org/downloads/`
+      )
+    } else {
+      dialog.showErrorBox(
+        'Backend Error',
+        'Failed to start the backend server.\n\n' +
+        `Error: ${error instanceof Error ? error.message : String(error)}\n\n` +
+        'Please check the logs and try again.'
+      )
+    }
   }
 }
 
@@ -125,6 +141,16 @@ function setupIpcHandlers() {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  // Configure CSP to allow script execution for pre-request/test scripts
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ["script-src 'self' 'unsafe-inline' 'unsafe-eval'"]
+      }
+    })
+  })
+
   setupIpcHandlers()
   await startDjango()
   await createWindow()

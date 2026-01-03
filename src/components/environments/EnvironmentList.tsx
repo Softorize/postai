@@ -7,10 +7,14 @@ import {
   Edit2,
   Trash2,
   Copy,
+  Upload,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useEnvironmentsStore } from '@/stores/environments.store'
+import { useTabsStore } from '@/stores/tabs.store'
 import { Environment } from '@/types'
+import { ImportEnvironmentDialog } from './ImportEnvironmentDialog'
+import { InputDialog } from '../common/InputDialog'
 
 interface EnvironmentListProps {
   searchQuery: string
@@ -26,7 +30,11 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
     deleteEnvironment,
   } = useEnvironmentsStore()
 
-  const [_editingId, setEditingId] = useState<string | null>(null)
+  const { openTab } = useTabsStore()
+
+  const [_editingId, _setEditingId] = useState<string | null>(null)
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const [showNewDialog, setShowNewDialog] = useState(false)
 
   const filteredEnvironments = searchQuery
     ? environments.filter((e) =>
@@ -34,15 +42,27 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
       )
     : environments
 
-  const handleCreate = async () => {
-    const name = prompt('Environment name:')
-    if (name) {
-      await createEnvironment(name)
-    }
+  const handleCreate = () => {
+    setShowNewDialog(true)
+  }
+
+  const handleConfirmCreate = async (name: string) => {
+    await createEnvironment(name)
+    setShowNewDialog(false)
   }
 
   const handleActivate = async (envId: string) => {
     await activateEnvironment(envId)
+  }
+
+  const handleOpenEnvironment = (env: Environment) => {
+    // Activate and open in tab for editing
+    activateEnvironment(env.id)
+    openTab({
+      type: 'environment',
+      title: env.name,
+      data: env,
+    })
   }
 
   const handleDelete = async (env: Environment) => {
@@ -61,14 +81,23 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
 
   return (
     <div className="py-1">
-      {/* Create button */}
-      <button
-        onClick={handleCreate}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-primary-400"
-      >
-        <Plus className="w-4 h-4" />
-        New Environment
-      </button>
+      {/* Action buttons */}
+      <div className="flex gap-1 px-2 pb-2">
+        <button
+          onClick={handleCreate}
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs bg-primary-600 hover:bg-primary-700 rounded transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          New
+        </button>
+        <button
+          onClick={() => setShowImportDialog(true)}
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs bg-panel hover:bg-white/5 border border-border rounded transition-colors"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          Import
+        </button>
+      </div>
 
       {filteredEnvironments.length === 0 ? (
         <div className="p-4 text-text-secondary text-sm text-center">
@@ -81,11 +110,28 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
             environment={env}
             isActive={activeEnvironment?.id === env.id}
             onActivate={() => handleActivate(env.id)}
-            onEdit={() => setEditingId(env.id)}
+            onClick={() => handleOpenEnvironment(env)}
+            onEdit={() => handleOpenEnvironment(env)}
             onDelete={() => handleDelete(env)}
           />
         ))
       )}
+
+      {/* Import Dialog */}
+      <ImportEnvironmentDialog
+        isOpen={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+      />
+
+      {/* New Environment Dialog */}
+      <InputDialog
+        isOpen={showNewDialog}
+        title="New Environment"
+        placeholder="Environment name..."
+        confirmText="Create"
+        onConfirm={handleConfirmCreate}
+        onCancel={() => setShowNewDialog(false)}
+      />
     </div>
   )
 }
@@ -93,13 +139,15 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
 function EnvironmentItem({
   environment,
   isActive,
-  onActivate,
+  onActivate: _onActivate,
+  onClick,
   onEdit,
   onDelete,
 }: {
   environment: Environment
   isActive: boolean
   onActivate: () => void
+  onClick: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -111,7 +159,7 @@ function EnvironmentItem({
         'flex items-center gap-2 px-3 py-2 hover:bg-white/5 cursor-pointer group relative',
         isActive && 'bg-primary-500/10'
       )}
-      onClick={onActivate}
+      onClick={onClick}
     >
       <Globe
         className={clsx(

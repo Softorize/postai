@@ -37,6 +37,7 @@ class McpServerViewSet(viewsets.ModelViewSet):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        result = None
         try:
             result = loop.run_until_complete(
                 test_mcp_connection(
@@ -48,46 +49,57 @@ class McpServerViewSet(viewsets.ModelViewSet):
                     env_vars=server.env_vars
                 )
             )
-            loop.close()
-
-            if result['success']:
-                # Update server connection status
-                server.is_connected = True
-                server.last_connected_at = timezone.now()
-                server.save()
-
-                # Update or create capabilities
-                McpServerCapabilities.objects.update_or_create(
-                    server=server,
-                    defaults={
-                        'tools': result.get('tools', []),
-                        'resources': result.get('resources', []),
-                        'prompts': result.get('prompts', [])
-                    }
-                )
-
-                return Response({
-                    'success': True,
-                    'message': 'Connected successfully',
-                    'tools': result.get('tools', []),
-                    'resources': result.get('resources', []),
-                    'prompts': result.get('prompts', [])
-                })
+        except BaseException as e:
+            # Catch all exceptions including BaseExceptionGroup
+            if result and result.get('success'):
+                # We got data before the cleanup error
+                pass
             else:
+                try:
+                    loop.close()
+                except:
+                    pass
                 server.is_connected = False
                 server.save()
                 return Response({
                     'success': False,
-                    'error': result.get('error', 'Connection failed')
+                    'error': str(e)
                 }, status=status.HTTP_400_BAD_REQUEST)
+        finally:
+            try:
+                loop.close()
+            except:
+                pass
 
-        except Exception as e:
-            loop.close()
+        if result and result.get('success'):
+            # Update server connection status
+            server.is_connected = True
+            server.last_connected_at = timezone.now()
+            server.save()
+
+            # Update or create capabilities
+            McpServerCapabilities.objects.update_or_create(
+                server=server,
+                defaults={
+                    'tools': result.get('tools', []),
+                    'resources': result.get('resources', []),
+                    'prompts': result.get('prompts', [])
+                }
+            )
+
+            return Response({
+                'success': True,
+                'message': 'Connected successfully',
+                'tools': result.get('tools', []),
+                'resources': result.get('resources', []),
+                'prompts': result.get('prompts', [])
+            })
+        else:
             server.is_connected = False
             server.save()
             return Response({
                 'success': False,
-                'error': str(e)
+                'error': result.get('error', 'Connection failed') if result else 'Connection failed'
             }, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
@@ -144,44 +156,76 @@ class McpServerViewSet(viewsets.ModelViewSet):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        result = None
+        execution_error = None
         try:
             async def execute():
-                async with client.connect():
-                    return await client.call_tool(tool_name, arguments)
+                nonlocal result
+                try:
+                    async with client.connect():
+                        result = await client.call_tool(tool_name, arguments)
+                except BaseExceptionGroup as eg:
+                    # Handle TaskGroup cleanup errors - if we got result, it's ok
+                    if result is None:
+                        raise
+                except Exception as e:
+                    if result is None:
+                        raise
 
-            result = loop.run_until_complete(execute())
-            loop.close()
+            loop.run_until_complete(execute())
+        except BaseExceptionGroup as eg:
+            # TaskGroup exceptions during cleanup - check if we got data
+            if result is None:
+                execution_error = '; '.join(str(exc) for exc in eg.exceptions)
+        except BaseException as e:
+            if result is None:
+                execution_error = str(e)
+        finally:
+            try:
+                loop.close()
+            except:
+                pass
 
+        # Handle execution error
+        if execution_error and result is None:
+            return Response({
+                'success': False,
+                'error': execution_error
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if result and result.success:
             # Save execution history
             execution = McpToolExecution.objects.create(
                 server=server,
                 tool_name=tool_name,
                 arguments=arguments,
-                result=result.result if result.success else None,
-                error_message=result.error if not result.success else None,
+                result=result.result,
+                error_message=None,
                 execution_time=result.execution_time_ms
             )
 
-            if result.success:
-                return Response({
-                    'success': True,
-                    'result': result.result,
-                    'execution_time_ms': result.execution_time_ms,
-                    'execution_id': str(execution.id)
-                })
-            else:
-                return Response({
-                    'success': False,
-                    'error': result.error,
-                    'execution_time_ms': result.execution_time_ms,
-                    'execution_id': str(execution.id)
-                }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'success': True,
+                'result': result.result,
+                'execution_time_ms': result.execution_time_ms,
+                'execution_id': str(execution.id)
+            })
+        else:
+            # Save failed execution
+            execution = McpToolExecution.objects.create(
+                server=server,
+                tool_name=tool_name,
+                arguments=arguments,
+                result=None,
+                error_message=result.error if result else 'Unknown error',
+                execution_time=result.execution_time_ms if result else 0
+            )
 
-        except Exception as e:
-            loop.close()
             return Response({
                 'success': False,
-                'error': str(e)
+                'error': result.error if result else 'Unknown error',
+                'execution_time_ms': result.execution_time_ms if result else 0,
+                'execution_id': str(execution.id)
             }, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
@@ -205,25 +249,35 @@ class McpServerViewSet(viewsets.ModelViewSet):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        result = None
         try:
             async def read():
                 async with client.connect():
                     return await client.read_resource(uri)
 
             result = loop.run_until_complete(read())
-            loop.close()
+        except BaseException as e:
+            if result:
+                pass  # We got data before cleanup error
+            else:
+                try:
+                    loop.close()
+                except:
+                    pass
+                return Response({
+                    'success': False,
+                    'error': str(e)
+                }, status=status.HTTP_400_BAD_REQUEST)
+        finally:
+            try:
+                loop.close()
+            except:
+                pass
 
-            return Response({
-                'success': True,
-                'contents': result.get('contents', [])
-            })
-
-        except Exception as e:
-            loop.close()
-            return Response({
-                'success': False,
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'success': True,
+            'contents': result.get('contents', []) if result else []
+        })
 
     @action(detail=True, methods=['post'])
     def get_prompt(self, request, pk=None):
@@ -247,26 +301,36 @@ class McpServerViewSet(viewsets.ModelViewSet):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        result = None
         try:
             async def get():
                 async with client.connect():
                     return await client.get_prompt(prompt_name, arguments)
 
             result = loop.run_until_complete(get())
-            loop.close()
+        except BaseException as e:
+            if result:
+                pass  # We got data before cleanup error
+            else:
+                try:
+                    loop.close()
+                except:
+                    pass
+                return Response({
+                    'success': False,
+                    'error': str(e)
+                }, status=status.HTTP_400_BAD_REQUEST)
+        finally:
+            try:
+                loop.close()
+            except:
+                pass
 
-            return Response({
-                'success': True,
-                'description': result.get('description'),
-                'messages': result.get('messages', [])
-            })
-
-        except Exception as e:
-            loop.close()
-            return Response({
-                'success': False,
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'success': True,
+            'description': result.get('description') if result else None,
+            'messages': result.get('messages', []) if result else []
+        })
 
     @action(detail=True, methods=['get'])
     def executions(self, request, pk=None):
@@ -288,6 +352,7 @@ class TestMcpConnectionView(APIView):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        result = None
         try:
             result = loop.run_until_complete(
                 test_mcp_connection(
@@ -299,24 +364,33 @@ class TestMcpConnectionView(APIView):
                     env_vars=serializer.validated_data.get('env_vars', {})
                 )
             )
-            loop.close()
-
-            if result['success']:
-                return Response({
-                    'success': True,
-                    'tools': result.get('tools', []),
-                    'resources': result.get('resources', []),
-                    'prompts': result.get('prompts', [])
-                })
+        except BaseException as e:
+            if result and result.get('success'):
+                pass  # We got data before cleanup error
             else:
+                try:
+                    loop.close()
+                except:
+                    pass
                 return Response({
                     'success': False,
-                    'error': result.get('error', 'Connection failed')
+                    'error': str(e)
                 }, status=status.HTTP_400_BAD_REQUEST)
+        finally:
+            try:
+                loop.close()
+            except:
+                pass
 
-        except Exception as e:
-            loop.close()
+        if result and result.get('success'):
+            return Response({
+                'success': True,
+                'tools': result.get('tools', []),
+                'resources': result.get('resources', []),
+                'prompts': result.get('prompts', [])
+            })
+        else:
             return Response({
                 'success': False,
-                'error': str(e)
+                'error': result.get('error', 'Connection failed') if result else 'Connection failed'
             }, status=status.HTTP_400_BAD_REQUEST)

@@ -76,3 +76,4 @@ class ExecuteWorkflowRequestSerializer(serializers.Serializer):
     """Serializer for workflow execution request."""
 
     input_variables = serializers.JSONField(default=dict)
+    environment_id = serializers.UUIDField(required=False, allow_null=True)

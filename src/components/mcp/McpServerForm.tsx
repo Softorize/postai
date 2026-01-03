@@ -117,7 +117,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-hidden">
+      <div className="bg-panel border border-border rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold">
             {serverId ? 'Edit MCP Server' : 'Add MCP Server'}
@@ -142,7 +142,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
+                className="w-full px-3 py-2 border border-border rounded-md bg-sidebar text-sm"
                 placeholder="My MCP Server"
                 required
               />
@@ -155,7 +155,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
                 type="text"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
+                className="w-full px-3 py-2 border border-border rounded-md bg-sidebar text-sm"
                 placeholder="Optional description"
               />
             </div>
@@ -169,7 +169,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
                   ...formData,
                   transport_type: e.target.value as McpTransportType
                 })}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
+                className="w-full px-3 py-2 border border-border rounded-md bg-sidebar text-sm"
               >
                 <option value="stdio">stdio (Command)</option>
                 <option value="sse">SSE (Server-Sent Events)</option>
@@ -186,7 +186,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
                     type="text"
                     value={formData.command}
                     onChange={(e) => setFormData({ ...formData, command: e.target.value })}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
+                    className="w-full px-3 py-2 border border-border rounded-md bg-sidebar text-sm"
                     placeholder="npx @modelcontextprotocol/server-filesystem"
                     required
                   />
@@ -213,7 +213,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
                           newArgs[index] = e.target.value
                           setFormData({ ...formData, args: newArgs })
                         }}
-                        className="flex-1 px-3 py-2 border border-input rounded-md bg-background text-sm"
+                        className="flex-1 px-3 py-2 border border-border rounded-md bg-sidebar text-sm"
                         placeholder="Argument"
                       />
                       {formData.args.length > 1 && (
@@ -240,7 +240,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
                     type="url"
                     value={formData.url}
                     onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
+                    className="w-full px-3 py-2 border border-border rounded-md bg-sidebar text-sm"
                     placeholder="http://localhost:3000/mcp"
                     required
                   />
@@ -267,7 +267,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
                           newHeaders[index].key = e.target.value
                           setFormData({ ...formData, headers: newHeaders })
                         }}
-                        className="flex-1 px-3 py-2 border border-input rounded-md bg-background text-sm"
+                        className="flex-1 px-3 py-2 border border-border rounded-md bg-sidebar text-sm"
                         placeholder="Header name"
                       />
                       <input
@@ -278,7 +278,7 @@ export function McpServerForm({ serverId, onClose }: Props) {
                           newHeaders[index].value = e.target.value
                           setFormData({ ...formData, headers: newHeaders })
                         }}
-                        className="flex-1 px-3 py-2 border border-input rounded-md bg-background text-sm"
+                        className="flex-1 px-3 py-2 border border-border rounded-md bg-sidebar text-sm"
                         placeholder="Header value"
                       />
                       {formData.headers.length > 1 && (

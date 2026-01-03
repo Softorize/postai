@@ -11,7 +11,10 @@ import {
 import { clsx } from 'clsx'
 import { CollectionTree } from '../collections/CollectionTree'
 import { EnvironmentList } from '../environments/EnvironmentList'
+import { HistoryList } from '../history/HistoryList'
+import { McpList } from '../mcp/McpList'
 import { ImportDialog } from '../collections/ImportDialog'
+import { InputDialog } from '../common/InputDialog'
 import { useCollectionsStore } from '@/stores/collections.store'
 
 type SidebarTab = 'collections' | 'environments' | 'history' | 'mcp'
@@ -27,13 +30,16 @@ export function Sidebar() {
   const [activeTab, setActiveTab] = useState<SidebarTab>('collections')
   const [searchQuery, setSearchQuery] = useState('')
   const [showImportDialog, setShowImportDialog] = useState(false)
+  const [showNewCollectionDialog, setShowNewCollectionDialog] = useState(false)
   const { createCollection } = useCollectionsStore()
 
-  const handleNewCollection = async () => {
-    const name = prompt('Collection name:')
-    if (name) {
-      await createCollection(name)
-    }
+  const handleNewCollection = () => {
+    setShowNewCollectionDialog(true)
+  }
+
+  const handleCreateCollection = async (name: string) => {
+    await createCollection(name)
+    setShowNewCollectionDialog(false)
   }
 
   const handleImport = () => {
@@ -99,22 +105,24 @@ export function Sidebar() {
       <div className="flex-1 overflow-auto">
         {activeTab === 'collections' && <CollectionTree searchQuery={searchQuery} />}
         {activeTab === 'environments' && <EnvironmentList searchQuery={searchQuery} />}
-        {activeTab === 'history' && (
-          <div className="p-4 text-text-secondary text-sm text-center">
-            Request history will appear here
-          </div>
-        )}
-        {activeTab === 'mcp' && (
-          <div className="p-4 text-text-secondary text-sm text-center">
-            MCP servers will appear here
-          </div>
-        )}
+        {activeTab === 'history' && <HistoryList searchQuery={searchQuery} />}
+        {activeTab === 'mcp' && <McpList searchQuery={searchQuery} />}
       </div>
 
       {/* Import Dialog */}
       <ImportDialog
         isOpen={showImportDialog}
         onClose={() => setShowImportDialog(false)}
+      />
+
+      {/* New Collection Dialog */}
+      <InputDialog
+        isOpen={showNewCollectionDialog}
+        title="New Collection"
+        placeholder="Collection name..."
+        confirmText="Create"
+        onConfirm={handleCreateCollection}
+        onCancel={() => setShowNewCollectionDialog(false)}
       />
     </div>
   )

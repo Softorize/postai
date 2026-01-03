@@ -34,6 +34,16 @@ export function AiChatSidebar() {
     fetchConversations()
   }, [])
 
+  // Auto-select first active provider if none selected
+  useEffect(() => {
+    if (!activeProviderId && providers.length > 0) {
+      const firstActiveProvider = providers.find(p => p.is_active)
+      if (firstActiveProvider) {
+        setActiveProvider(firstActiveProvider.id)
+      }
+    }
+  }, [providers, activeProviderId, setActiveProvider])
+
   useEffect(() => {
     scrollToBottom()
   }, [activeConversationId, conversations])
@@ -186,7 +196,7 @@ export function AiChatSidebar() {
             <Sparkles className="h-12 w-12 mb-4 opacity-50" />
             <p className="text-sm">Select an AI provider to start chatting</p>
           </div>
-        ) : activeConversation?.messages.length === 0 ? (
+        ) : !activeConversation || !activeConversation.messages || activeConversation.messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-text-secondary">
             <Bot className="h-12 w-12 mb-4 opacity-50" />
             <p className="text-sm">Start a conversation with AI</p>
@@ -288,7 +298,7 @@ export function AiChatSidebar() {
             <Send className="h-4 w-4" />
           </button>
         </div>
-        {activeConversation && activeConversation.messages.length > 0 && (
+        {activeConversation && activeConversation.messages && activeConversation.messages.length > 0 && (
           <button
             onClick={() => clearConversationMessages(activeConversation.id)}
             className="mt-2 text-xs text-text-secondary hover:text-red-400 flex items-center gap-1"

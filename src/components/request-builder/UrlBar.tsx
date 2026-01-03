@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, Save, FolderPlus, Code2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { HttpMethod } from '@/types'
 import { useEnvironmentsStore } from '@/stores/environments.store'
@@ -21,18 +21,30 @@ interface UrlBarProps {
   method: HttpMethod
   url: string
   isLoading: boolean
+  isDirty?: boolean
+  canSave?: boolean
+  showCodeSnippet?: boolean
   onMethodChange: (method: HttpMethod) => void
   onUrlChange: (url: string) => void
   onSend: () => void
+  onSave?: () => void
+  onSaveAs?: () => void
+  onToggleCodeSnippet?: () => void
 }
 
 export function UrlBar({
   method,
   url,
   isLoading,
+  isDirty = false,
+  canSave = false,
+  showCodeSnippet = false,
   onMethodChange,
   onUrlChange,
   onSend,
+  onSave,
+  onSaveAs,
+  onToggleCodeSnippet,
 }: UrlBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const { activeEnvironment } = useEnvironmentsStore()
@@ -183,6 +195,52 @@ export function UrlBar({
           )}
         />
       </div>
+
+      {/* Save button - for collection requests */}
+      {canSave && (
+        <button
+          onClick={onSave}
+          disabled={!isDirty}
+          className={clsx(
+            'flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors border',
+            isDirty
+              ? 'bg-green-600 hover:bg-green-700 border-green-500'
+              : 'bg-panel border-border text-text-secondary cursor-not-allowed'
+          )}
+          title={isDirty ? 'Save changes' : 'No changes to save'}
+        >
+          <Save className="w-4 h-4" />
+          Save
+        </button>
+      )}
+
+      {/* Save As button - for non-collection requests (history, new) */}
+      {!canSave && onSaveAs && (
+        <button
+          onClick={onSaveAs}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors border bg-panel border-border hover:bg-white/5"
+          title="Save to collection"
+        >
+          <FolderPlus className="w-4 h-4" />
+          Save As
+        </button>
+      )}
+
+      {/* Code Snippet button */}
+      {onToggleCodeSnippet && (
+        <button
+          onClick={onToggleCodeSnippet}
+          className={clsx(
+            'flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors border',
+            showCodeSnippet
+              ? 'bg-primary-500/20 text-primary-400 border-primary-500/30'
+              : 'bg-panel border-border hover:bg-white/5 text-text-secondary hover:text-text-primary'
+          )}
+          title="Code snippet"
+        >
+          <Code2 className="w-4 h-4" />
+        </button>
+      )}
 
       {/* Send button */}
       <button

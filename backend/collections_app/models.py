@@ -1,10 +1,17 @@
 """Collection models for PostAI."""
 from django.db import models
-from core.models import BaseModel
+from core.models import BaseModel, Workspace
 
 
 class Collection(BaseModel):
     """API collection container."""
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='collections',
+        null=True,  # Nullable initially for migration
+        blank=True
+    )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default='')
     postman_id = models.CharField(max_length=255, blank=True, null=True)
@@ -78,7 +85,7 @@ class Request(BaseModel):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default='')
     method = models.CharField(max_length=10, choices=Method.choices, default=Method.GET)
-    url = models.TextField()
+    url = models.TextField(blank=True, default='')
     headers = models.JSONField(default=list)
     params = models.JSONField(default=list)
     body = models.JSONField(null=True, blank=True)

@@ -144,3 +144,35 @@ button:disabled {
 .monaco-editor {
   border-radius: 4px;
 }
+
+/* JSON body editor with syntax highlighting */
+.json-editor-textarea {
+  -webkit-text-fill-color: transparent;
+  caret-color: #ffffff !important;
+}
+
+.json-editor-textarea::selection {
+  -webkit-text-fill-color: #ffffff;
+  background: rgba(14, 165, 233, 0.5) !important;
+}
+
+.json-editor-textarea::-moz-selection {
+  -webkit-text-fill-color: #ffffff;
+  background: rgba(14, 165, 233, 0.5) !important;
+}
+
+/* Script editor with syntax highlighting */
+.script-editor-textarea {
+  -webkit-text-fill-color: transparent;
+  caret-color: #ffffff !important;
+}
+
+.script-editor-textarea::selection {
+  -webkit-text-fill-color: #ffffff;
+  background: rgba(14, 165, 233, 0.5) !important;
+}
+
+.script-editor-textarea::-moz-selection {
+  -webkit-text-fill-color: #ffffff;
+  background: rgba(14, 165, 233, 0.5) !important;
+}

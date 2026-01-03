@@ -1,8 +1,10 @@
 """Environment views for PostAI."""
+import json
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.models import Workspace
 from .models import Environment, EnvironmentVariable
 from .serializers import (
     EnvironmentSerializer,
@@ -10,6 +12,7 @@ from .serializers import (
     EnvironmentVariableSerializer,
     SelectValueSerializer,
 )
+from collections_app.services.postman_importer import import_postman_environment
 
 
 class EnvironmentViewSet(viewsets.ModelViewSet):
@@ -17,10 +20,23 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
     queryset = Environment.objects.all()
     serializer_class = EnvironmentSerializer
 
+    def get_queryset(self):
+        """Filter environments by workspace if specified."""
+        queryset = Environment.objects.all()
+        workspace_id = self.request.query_params.get('workspace')
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        return queryset
+
     def get_serializer_class(self):
         if self.action == 'create':
             return EnvironmentCreateSerializer
         return EnvironmentSerializer
+
+    def perform_create(self, serializer):
+        """Assign environment to active workspace."""
+        workspace = Workspace.get_or_create_default()
+        serializer.save(workspace=workspace)
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
@@ -29,6 +45,56 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
         environment.is_active = True
         environment.save()
         return Response(EnvironmentSerializer(environment).data)
+
+    @action(detail=False, methods=['post'], url_path='import')
+    def import_environment(self, request):
+        """Import a Postman environment from JSON."""
+        file_content = request.data.get('content')
+        if not file_content:
+            file = request.FILES.get('file')
+            if file:
+                file_content = file.read().decode('utf-8')
+
+        if not file_content:
+            return Response(
+                {'error': 'No environment data provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        result = import_postman_environment(file_content)
+
+        if not result.get('success'):
+            return Response(
+                {'success': False, 'error': result.get('error', 'Import failed')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create the environment with workspace
+        workspace = Workspace.get_or_create_default()
+        environment = Environment.objects.create(
+            name=result['name'],
+            description=f"Imported from Postman",
+            workspace=workspace
+        )
+
+        # Create variables
+        variables_created = 0
+        for var_data in result.get('variables', []):
+            EnvironmentVariable.objects.create(
+                environment=environment,
+                key=var_data['key'],
+                values=var_data.get('values', ['']),
+                selected_value_index=var_data.get('selected_value_index', 0),
+                enabled=var_data.get('enabled', True),
+                is_secret=var_data.get('is_secret', False)
+            )
+            variables_created += 1
+
+        return Response({
+            'success': True,
+            'environment': EnvironmentSerializer(environment).data,
+            'variables_imported': variables_created
+        }, status=status.HTTP_201_CREATED)
 
 
 class ActiveEnvironmentView(APIView):

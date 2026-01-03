@@ -1,5 +1,12 @@
 """Request views for PostAI."""
 import asyncio
+import hashlib
+import hmac as hmac_lib
+import base64
+import uuid
+import time
+from urllib.parse import urlparse
+import httpx
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -19,12 +26,17 @@ class ExecuteRequestView(APIView):
         timeout = request.data.get('timeout', 30)
         proxy = request.data.get('proxy')
         save_history = request.data.get('save_history', True)
+        hmac_auth = request.data.get('hmac_auth')
 
         if not url:
             return Response(
                 {'error': 'URL is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Apply HMAC authentication if configured
+        if hmac_auth:
+            headers = self._apply_hmac_auth(method, url, headers, body, hmac_auth)
 
         # Execute request asynchronously
         loop = asyncio.new_event_loop()
@@ -62,6 +74,79 @@ class ExecuteRequestView(APIView):
             )
 
         return Response(result)
+
+    def _apply_hmac_auth(self, method, url, headers, body, hmac_config):
+        """Apply HMAC authentication to the request."""
+        headers = dict(headers)  # Make a copy
+
+        algorithm = hmac_config.get('algorithm', 'sha256')
+        secret_key = hmac_config.get('secretKey', '')
+        components = hmac_config.get('signatureComponents', [])
+        signature_header = hmac_config.get('signatureHeader', 'X-Signature')
+        timestamp_header = hmac_config.get('timestampHeader', 'X-Timestamp')
+        nonce_header = hmac_config.get('nonceHeader', 'X-Nonce')
+        encoding = hmac_config.get('encoding', 'hex')
+
+        # Generate timestamp and nonce
+        timestamp = str(int(time.time()))
+        nonce = str(uuid.uuid4())
+
+        # Build the message to sign
+        message_parts = []
+        parsed_url = urlparse(url)
+
+        for component in components:
+            if component == 'method':
+                message_parts.append(method.upper())
+            elif component == 'path':
+                path = parsed_url.path or '/'
+                if parsed_url.query:
+                    path += '?' + parsed_url.query
+                message_parts.append(path)
+            elif component == 'timestamp':
+                message_parts.append(timestamp)
+            elif component == 'body':
+                message_parts.append(body or '')
+            elif component == 'nonce':
+                message_parts.append(nonce)
+
+        message = '\n'.join(message_parts)
+
+        # Select hash algorithm
+        hash_algorithms = {
+            'sha256': hashlib.sha256,
+            'sha512': hashlib.sha512,
+            'sha1': hashlib.sha1,
+            'md5': hashlib.md5,
+        }
+        hash_func = hash_algorithms.get(algorithm, hashlib.sha256)
+
+        # Compute HMAC signature
+        signature = hmac_lib.new(
+            secret_key.encode('utf-8'),
+            message.encode('utf-8'),
+            hash_func
+        )
+
+        # Encode the signature
+        if encoding == 'base64':
+            signature_value = base64.b64encode(signature.digest()).decode('utf-8')
+        else:  # hex
+            signature_value = signature.hexdigest()
+
+        # Add signature header
+        if signature_header:
+            headers[signature_header] = signature_value
+
+        # Add timestamp header if timestamp is in components
+        if 'timestamp' in components and timestamp_header:
+            headers[timestamp_header] = timestamp
+
+        # Add nonce header if nonce is in components
+        if 'nonce' in components and nonce_header:
+            headers[nonce_header] = nonce
+
+        return headers
 
 
 class RequestHistoryView(APIView):
@@ -137,3 +222,114 @@ class RequestHistoryDetailView(APIView):
                 {'error': 'Not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class OAuth2TokenView(APIView):
+    """Fetch OAuth2 access tokens."""
+
+    def post(self, request):
+        """Fetch an OAuth2 access token."""
+        grant_type = request.data.get('grant_type', 'client_credentials')
+        access_token_url = request.data.get('access_token_url')
+        client_id = request.data.get('client_id')
+        client_secret = request.data.get('client_secret', '')
+        scope = request.data.get('scope', '')
+        username = request.data.get('username', '')
+        password = request.data.get('password', '')
+
+        if not access_token_url:
+            return Response(
+                {'error': 'Access Token URL is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not client_id:
+            return Response(
+                {'error': 'Client ID is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Build the token request data
+        data = {
+            'grant_type': grant_type,
+            'client_id': client_id,
+        }
+
+        if client_secret:
+            data['client_secret'] = client_secret
+
+        if scope:
+            data['scope'] = scope
+
+        # Add grant-type specific fields
+        if grant_type == 'password':
+            if not username or not password:
+                return Response(
+                    {'error': 'Username and password are required for password grant'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            data['username'] = username
+            data['password'] = password
+
+        # Execute the token request
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(
+                self._fetch_token(access_token_url, data, client_id, client_secret)
+            )
+        finally:
+            loop.close()
+
+        return Response(result)
+
+    async def _fetch_token(self, url, data, client_id, client_secret):
+        """Fetch OAuth2 token asynchronously."""
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                # Try form-encoded first (most common)
+                response = await client.post(
+                    url,
+                    data=data,
+                    headers={
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json',
+                    },
+                )
+
+                # Try with Basic Auth if form-encoded fails
+                if response.status_code == 401 and client_secret:
+                    response = await client.post(
+                        url,
+                        data=data,
+                        auth=(client_id, client_secret),
+                        headers={
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'Accept': 'application/json',
+                        },
+                    )
+
+                if response.status_code >= 400:
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get('error_description') or error_data.get('error') or response.text
+                    except Exception:
+                        error_msg = response.text or f'HTTP {response.status_code}'
+                    return {'error': error_msg}
+
+                try:
+                    token_data = response.json()
+                    return {
+                        'access_token': token_data.get('access_token'),
+                        'refresh_token': token_data.get('refresh_token'),
+                        'token_type': token_data.get('token_type', 'Bearer'),
+                        'expires_in': token_data.get('expires_in'),
+                        'scope': token_data.get('scope'),
+                    }
+                except Exception:
+                    return {'error': 'Invalid JSON response from token endpoint'}
+
+        except httpx.TimeoutException:
+            return {'error': 'Request timed out'}
+        except httpx.RequestError as e:
+            return {'error': f'Request failed: {str(e)}'}

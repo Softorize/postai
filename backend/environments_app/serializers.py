@@ -11,7 +11,7 @@ class EnvironmentVariableSerializer(serializers.ModelSerializer):
         model = EnvironmentVariable
         fields = [
             'id', 'environment', 'key', 'values', 'selected_value_index',
-            'current_value', 'description', 'is_secret', 'enabled',
+            'current_value', 'description', 'is_secret', 'enabled', 'link_group',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'environment', 'created_at', 'updated_at', 'current_value']

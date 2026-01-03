@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import api from '../api/client'
 import { Workflow, WorkflowNode, WorkflowEdge, WorkflowExecution } from '../types'
+import { useWorkspacesStore } from './workspaces.store'
 
 interface WorkflowsState {
   workflows: Workflow[]
@@ -28,7 +29,7 @@ interface WorkflowsState {
   updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
 
   // Execution
-  executeWorkflow: (id: string, inputVariables?: Record<string, unknown>) => Promise<WorkflowExecution>
+  executeWorkflow: (id: string, inputVariables?: Record<string, unknown>, environmentId?: string) => Promise<WorkflowExecution>
   fetchExecutions: (workflowId: string) => Promise<void>
 
   setError: (error: string | null) => void
@@ -44,8 +45,14 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
 
   fetchWorkflows: async () => {
     try {
-      const response = await api.get('/workflows/workflows/')
-      set({ workflows: response.data.results || response.data })
+      const activeWorkspace = useWorkspacesStore.getState().activeWorkspace
+      const params = activeWorkspace ? { workspace: activeWorkspace.id } : {}
+      const response = await api.get('/workflows/workflows/', { params })
+      set({
+        workflows: response.data.results || response.data,
+        activeWorkflowId: null,
+        activeWorkflow: null
+      })
     } catch (error: any) {
       set({ error: error.message })
     }
@@ -144,6 +151,8 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
       const newWorkflow = response.data
       set(state => ({
         workflows: [...state.workflows, newWorkflow],
+        activeWorkflow: newWorkflow,
+        activeWorkflowId: newWorkflow.id,
         isLoading: false
       }))
       return newWorkflow
@@ -201,15 +210,26 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
     }
   },
 
-  deleteNode: (nodeId) => {
-    const { activeWorkflow } = get()
-    if (activeWorkflow) {
+  deleteNode: async (nodeId) => {
+    const { activeWorkflow, activeWorkflowId } = get()
+    if (activeWorkflow && activeWorkflowId) {
       const nodes = activeWorkflow.nodes.filter(n => n.id !== nodeId)
       const edges = activeWorkflow.edges.filter(
         e => e.source !== nodeId && e.target !== nodeId
       )
-      get().updateNodes(nodes)
-      get().updateEdges(edges)
+
+      // Update local state immediately
+      set({
+        activeWorkflow: { ...activeWorkflow, nodes, edges }
+      })
+
+      // Save to server (single call with both nodes and edges)
+      try {
+        await api.patch(`/workflows/workflows/${activeWorkflowId}/`, { nodes, edges })
+      } catch (error: any) {
+        // Revert on error
+        set({ activeWorkflow, error: error.message })
+      }
     }
   },
 
@@ -223,11 +243,12 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
     }
   },
 
-  executeWorkflow: async (id, inputVariables = {}) => {
+  executeWorkflow: async (id, inputVariables = {}, environmentId?: string) => {
     set({ isLoading: true, error: null })
     try {
       const response = await api.post(`/workflows/workflows/${id}/execute/`, {
-        input_variables: inputVariables
+        input_variables: inputVariables,
+        environment_id: environmentId
       })
       set({ isLoading: false })
 

@@ -10,6 +10,7 @@ class AiProvider(BaseModel):
         ANTHROPIC = 'anthropic'
         DEEPSEEK = 'deepseek'
         OPENAI = 'openai'
+        COPILOT = 'copilot'
         CUSTOM = 'custom'
 
     name = models.CharField(max_length=255)

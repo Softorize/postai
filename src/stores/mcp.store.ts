@@ -172,57 +172,57 @@ export const useMcpStore = create<McpState>((set, get) => ({
   },
 
   executeTool: async (serverId, toolName, args) => {
-    set({ isLoading: true, error: null })
+    // Don't set global isLoading - we use per-tool loading state in the UI
+    set({ error: null })
     try {
       const response = await api.post(`/mcp/servers/${serverId}/execute_tool/`, {
         tool_name: toolName,
         arguments: args
       })
-      set({ isLoading: false })
       if (response.data.success) {
         return response.data.result
       } else {
         throw new Error(response.data.error)
       }
     } catch (error: any) {
-      set({ error: error.response?.data?.error || error.message, isLoading: false })
+      set({ error: error.response?.data?.error || error.message })
       throw error
     }
   },
 
   readResource: async (serverId, uri) => {
-    set({ isLoading: true, error: null })
+    // Don't set global isLoading - we use per-resource loading state in the UI
+    set({ error: null })
     try {
       const response = await api.post(`/mcp/servers/${serverId}/read_resource/`, {
         uri
       })
-      set({ isLoading: false })
       if (response.data.success) {
         return response.data.contents
       } else {
         throw new Error(response.data.error)
       }
     } catch (error: any) {
-      set({ error: error.response?.data?.error || error.message, isLoading: false })
+      set({ error: error.response?.data?.error || error.message })
       throw error
     }
   },
 
   getPrompt: async (serverId, promptName, args = {}) => {
-    set({ isLoading: true, error: null })
+    // Don't set global isLoading - we use per-prompt loading state in the UI
+    set({ error: null })
     try {
       const response = await api.post(`/mcp/servers/${serverId}/get_prompt/`, {
         prompt_name: promptName,
         arguments: args
       })
-      set({ isLoading: false })
       if (response.data.success) {
         return response.data
       } else {
         throw new Error(response.data.error)
       }
     } catch (error: any) {
-      set({ error: error.response?.data?.error || error.message, isLoading: false })
+      set({ error: error.response?.data?.error || error.message })
       throw error
     }
   },

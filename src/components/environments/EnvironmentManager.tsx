@@ -7,13 +7,19 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  Link,
+  Unlink,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useEnvironmentsStore } from '@/stores/environments.store'
 import { Environment, EnvironmentVariable } from '@/types'
 import toast from 'react-hot-toast'
 
-export function EnvironmentManager() {
+interface EnvironmentManagerProps {
+  environmentId?: string  // If provided, show only this environment
+}
+
+export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
   const {
     environments,
     activeEnvironment,
@@ -25,18 +31,36 @@ export function EnvironmentManager() {
     updateVariable,
     deleteVariable,
     selectVariableValue,
+    addVariableValue,
   } = useEnvironmentsStore()
 
-  const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(new Set())
+  // When showing a single environment, auto-expand it
+  const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(
+    environmentId ? new Set([environmentId]) : new Set()
+  )
   const [newVarKey, setNewVarKey] = useState('')
   const [newVarValue, setNewVarValue] = useState('')
   const [newVarDescription, setNewVarDescription] = useState('')
   const [showNewEnvForm, setShowNewEnvForm] = useState(false)
   const [newEnvName, setNewEnvName] = useState('')
+  const [addingValueTo, setAddingValueTo] = useState<{ envId: string; varId: string } | null>(null)
+  const [newValueInput, setNewValueInput] = useState('')
 
   useEffect(() => {
     fetchEnvironments()
   }, [])
+
+  // Auto-expand the environment when environmentId changes
+  useEffect(() => {
+    if (environmentId) {
+      setExpandedEnvs(new Set([environmentId]))
+    }
+  }, [environmentId])
+
+  // Filter environments if showing a specific one
+  const displayedEnvironments = environmentId
+    ? environments.filter(e => e.id === environmentId)
+    : environments
 
   const toggleExpand = (envId: string) => {
     const newExpanded = new Set(expandedEnvs)
@@ -117,23 +141,52 @@ export function EnvironmentManager() {
   const handleSelectValue = async (env: Environment, variable: EnvironmentVariable, index: number) => {
     try {
       await selectVariableValue(env.id, variable.id, index)
+      // Refresh to get updated linked variables
+      await fetchEnvironments()
     } catch (err) {
       toast.error('Failed to select value')
     }
   }
 
-  const handleAddValueToVariable = async (env: Environment, variable: EnvironmentVariable) => {
-    const newValue = prompt('New value:')
-    if (newValue !== null) {
-      try {
-        await updateVariable(env.id, variable.id, {
-          values: [...variable.values, newValue],
-        })
-        toast.success('Value added')
-      } catch (err) {
-        toast.error('Failed to add value')
+  const handleLinkVariables = async (env: Environment, sourceVar: EnvironmentVariable, targetVar: EnvironmentVariable) => {
+    try {
+      // If target has a link group, use it; otherwise create new one from source's key
+      const newGroup = targetVar.link_group || sourceVar.key
+
+      // Update source variable
+      await updateVariable(env.id, sourceVar.id, { link_group: newGroup })
+
+      // Update target variable if it doesn't have a link group
+      if (!targetVar.link_group) {
+        await updateVariable(env.id, targetVar.id, { link_group: newGroup })
       }
+
+      toast.success(`Linked ${sourceVar.key} with ${targetVar.key}`)
+    } catch (err) {
+      toast.error('Failed to link variables')
     }
+  }
+
+  const handleStartAddValue = (env: Environment, variable: EnvironmentVariable) => {
+    setAddingValueTo({ envId: env.id, varId: variable.id })
+    setNewValueInput('')
+  }
+
+  const handleConfirmAddValue = async () => {
+    if (!addingValueTo || !newValueInput.trim()) return
+    try {
+      await addVariableValue(addingValueTo.envId, addingValueTo.varId, newValueInput.trim())
+      toast.success('Value added')
+      setAddingValueTo(null)
+      setNewValueInput('')
+    } catch (err) {
+      toast.error('Failed to add value')
+    }
+  }
+
+  const handleCancelAddValue = () => {
+    setAddingValueTo(null)
+    setNewValueInput('')
   }
 
   return (
@@ -142,9 +195,13 @@ export function EnvironmentManager() {
       <div className="flex items-center justify-between p-4 border-b border-border bg-sidebar">
         <div className="flex items-center gap-2">
           <Globe className="w-5 h-5 text-primary-400" />
-          <h1 className="text-lg font-semibold">Environment Manager</h1>
+          <h1 className="text-lg font-semibold">
+            {environmentId && displayedEnvironments[0]
+              ? displayedEnvironments[0].name
+              : 'Environment Manager'}
+          </h1>
         </div>
-        {showNewEnvForm ? (
+        {!environmentId && showNewEnvForm ? (
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -178,7 +235,7 @@ export function EnvironmentManager() {
               Cancel
             </button>
           </div>
-        ) : (
+        ) : !environmentId ? (
           <button
             onClick={() => setShowNewEnvForm(true)}
             className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 rounded text-sm transition-colors"
@@ -186,20 +243,20 @@ export function EnvironmentManager() {
             <Plus className="w-4 h-4" />
             New Environment
           </button>
-        )}
+        ) : null}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-4">
-        {environments.length === 0 ? (
+        {displayedEnvironments.length === 0 ? (
           <div className="text-center py-12 text-text-secondary">
             <Globe className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>No environments yet</p>
-            <p className="text-sm mt-2">Create an environment to manage variables</p>
+            <p>{environmentId ? 'Environment not found' : 'No environments yet'}</p>
+            <p className="text-sm mt-2">{environmentId ? '' : 'Create an environment to manage variables'}</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {environments.map((env) => (
+            {displayedEnvironments.map((env) => (
               <div
                 key={env.id}
                 className="border border-border rounded-lg overflow-hidden bg-sidebar"
@@ -271,12 +328,19 @@ export function EnvironmentManager() {
                       <VariableRow
                         key={variable.id}
                         variable={variable}
+                        allVariables={env.variables || []}
                         onUpdate={(updates) =>
                           handleUpdateVariable(env, variable, updates)
                         }
                         onDelete={() => handleDeleteVariable(env, variable)}
-                        onAddValue={() => handleAddValueToVariable(env, variable)}
+                        onAddValue={() => handleStartAddValue(env, variable)}
                         onSelectValue={(index) => handleSelectValue(env, variable, index)}
+                        onLinkTo={(targetVar) => handleLinkVariables(env, variable, targetVar)}
+                        isAddingValue={addingValueTo?.varId === variable.id}
+                        newValueInput={newValueInput}
+                        onNewValueChange={setNewValueInput}
+                        onConfirmAddValue={handleConfirmAddValue}
+                        onCancelAddValue={handleCancelAddValue}
                       />
                     ))}
 
@@ -333,103 +397,244 @@ export function EnvironmentManager() {
 
 function VariableRow({
   variable,
+  allVariables,
   onUpdate,
   onDelete,
   onAddValue,
   onSelectValue,
+  onLinkTo,
+  isAddingValue,
+  newValueInput,
+  onNewValueChange,
+  onConfirmAddValue,
+  onCancelAddValue,
 }: {
   variable: EnvironmentVariable
+  allVariables: EnvironmentVariable[]
   onUpdate: (updates: Partial<EnvironmentVariable>) => void
   onDelete: () => void
   onAddValue: () => void
   onSelectValue: (index: number) => void
+  onLinkTo: (targetVar: EnvironmentVariable) => void
+  isAddingValue?: boolean
+  newValueInput?: string
+  onNewValueChange?: (value: string) => void
+  onConfirmAddValue?: () => void
+  onCancelAddValue?: () => void
 }) {
   const [showSecret, setShowSecret] = useState(false)
+  const [showLinkMenu, setShowLinkMenu] = useState(false)
 
   const currentValue = variable.values[variable.selected_value_index] || ''
 
+  // Get other variables that can be linked (have multiple values)
+  const linkableVariables = allVariables.filter(
+    v => v.id !== variable.id && v.values.length > 1
+  )
+
+  // Check if this variable is linked to others
+  const linkedVariables = variable.link_group
+    ? allVariables.filter(v => v.link_group === variable.link_group && v.id !== variable.id)
+    : []
+
+  const handleLinkToVar = (targetVar: EnvironmentVariable) => {
+    onLinkTo(targetVar)
+    setShowLinkMenu(false)
+  }
+
+  const handleUnlink = () => {
+    onUpdate({ link_group: null })
+    setShowLinkMenu(false)
+  }
+
   return (
-    <div className="grid grid-cols-12 gap-2 px-4 py-2 border-t border-border hover:bg-white/5 group">
-      <div className="col-span-2 flex items-center">
-        <input
-          type="checkbox"
-          checked={variable.enabled}
-          onChange={(e) => onUpdate({ enabled: e.target.checked })}
-          className="mr-2"
-        />
-        <span className="text-sm font-mono truncate">{variable.key}</span>
-      </div>
-      <div className="col-span-3 flex items-center gap-2">
-        {variable.values.length > 1 ? (
-          <select
-            value={variable.selected_value_index}
-            onChange={(e) => onSelectValue(parseInt(e.target.value))}
-            className="flex-1 px-2 py-1 text-sm bg-panel border border-border rounded"
-          >
-            {variable.values.map((val, idx) => (
-              <option key={idx} value={idx}>
-                {variable.is_secret ? '••••••••' : val || '(empty)'}
-              </option>
-            ))}
-          </select>
-        ) : (
+    <>
+      <div className="grid grid-cols-12 gap-2 px-4 py-2 border-t border-border hover:bg-white/5 group">
+        <div className="col-span-2 flex items-center">
           <input
-            type={variable.is_secret && !showSecret ? 'password' : 'text'}
-            value={currentValue}
-            onChange={(e) => onUpdate({ values: [e.target.value] })}
-            className="flex-1 px-2 py-1 text-sm bg-panel border border-border rounded font-mono"
+            type="checkbox"
+            checked={variable.enabled}
+            onChange={(e) => onUpdate({ enabled: e.target.checked })}
+            className="mr-2"
           />
-        )}
-        {variable.is_secret && (
-          <button
-            onClick={() => setShowSecret(!showSecret)}
-            className="p-1 hover:bg-white/10 rounded"
-          >
-            {showSecret ? (
-              <EyeOff className="w-4 h-4 text-text-secondary" />
-            ) : (
-              <Eye className="w-4 h-4 text-text-secondary" />
-            )}
-          </button>
-        )}
-        <button
-          onClick={onAddValue}
-          className="p-1 hover:bg-white/10 rounded text-text-secondary"
-          title="Add another value"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="col-span-3 flex items-center">
-        <input
-          type="text"
-          value={variable.description || ''}
-          onChange={(e) => onUpdate({ description: e.target.value })}
-          placeholder="Add description..."
-          className="w-full px-2 py-1 text-sm bg-transparent border-0 text-text-secondary focus:text-text-primary focus:bg-panel focus:border focus:border-border rounded"
-        />
-      </div>
-      <div className="col-span-2 flex items-center">
-        <button
-          onClick={() => onUpdate({ is_secret: !variable.is_secret })}
-          className={clsx(
-            'px-2 py-0.5 text-xs rounded',
-            variable.is_secret
-              ? 'bg-yellow-500/20 text-yellow-400'
-              : 'bg-panel text-text-secondary'
+          <span className="text-sm font-mono truncate">{variable.key}</span>
+        </div>
+        <div className="col-span-3 flex items-center gap-2">
+          {variable.values.length > 1 ? (
+            <select
+              value={variable.selected_value_index}
+              onChange={(e) => onSelectValue(parseInt(e.target.value))}
+              className="flex-1 px-2 py-1 text-sm bg-panel border border-border rounded"
+            >
+              {variable.values.map((val, idx) => (
+                <option key={idx} value={idx}>
+                  {variable.is_secret ? '••••••••' : val || '(empty)'}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type={variable.is_secret && !showSecret ? 'password' : 'text'}
+              value={currentValue}
+              onChange={(e) => onUpdate({ values: [e.target.value] })}
+              className="flex-1 px-2 py-1 text-sm bg-panel border border-border rounded font-mono"
+            />
           )}
-        >
-          {variable.is_secret ? 'Secret' : 'Default'}
-        </button>
+          {variable.is_secret && (
+            <button
+              onClick={() => setShowSecret(!showSecret)}
+              className="p-1 hover:bg-white/10 rounded"
+            >
+              {showSecret ? (
+                <EyeOff className="w-4 h-4 text-text-secondary" />
+              ) : (
+                <Eye className="w-4 h-4 text-text-secondary" />
+              )}
+            </button>
+          )}
+          <button
+            onClick={onAddValue}
+            className="p-1 hover:bg-white/10 rounded text-text-secondary hover:text-primary-400"
+            title="Add another value"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="col-span-3 flex items-center">
+          <input
+            type="text"
+            value={variable.description || ''}
+            onChange={(e) => onUpdate({ description: e.target.value })}
+            placeholder="Add description..."
+            className="w-full px-2 py-1 text-sm bg-transparent border-0 text-text-secondary focus:text-text-primary focus:bg-panel focus:border focus:border-border rounded"
+          />
+        </div>
+        <div className="col-span-2 flex items-center gap-2">
+          <button
+            onClick={() => onUpdate({ is_secret: !variable.is_secret })}
+            className={clsx(
+              'px-2 py-0.5 text-xs rounded',
+              variable.is_secret
+                ? 'bg-yellow-500/20 text-yellow-400'
+                : 'bg-panel text-text-secondary'
+            )}
+          >
+            {variable.is_secret ? 'Secret' : 'Default'}
+          </button>
+          {/* Link button - only show for multi-value variables */}
+          {variable.values.length > 1 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowLinkMenu(!showLinkMenu)}
+                className={clsx(
+                  'p-1 rounded transition-colors',
+                  variable.link_group
+                    ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
+                    : 'hover:bg-white/10 text-text-secondary hover:text-primary-400'
+                )}
+                title={variable.link_group ? `Linked to: ${linkedVariables.map(v => v.key).join(', ')}` : 'Link to another variable'}
+              >
+                {variable.link_group ? (
+                  <Link className="w-4 h-4" />
+                ) : (
+                  <Unlink className="w-4 h-4" />
+                )}
+              </button>
+              {/* Link menu dropdown - positioned above */}
+              {showLinkMenu && (
+                <div className="absolute bottom-full left-0 mb-1 w-48 bg-sidebar border border-border rounded-lg shadow-lg z-50">
+                  <div className="p-2 text-xs text-text-secondary border-b border-border">
+                    {variable.link_group ? 'Linked with' : 'Link to variable'}
+                  </div>
+                  {variable.link_group ? (
+                    <>
+                      {linkedVariables.map(v => (
+                        <div key={v.id} className="px-3 py-2 text-sm text-cyan-400">
+                          {v.key}
+                        </div>
+                      ))}
+                      <button
+                        onClick={handleUnlink}
+                        className="w-full px-3 py-2 text-sm text-left text-red-400 hover:bg-red-500/10 border-t border-border"
+                      >
+                        Unlink
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {linkableVariables.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-text-secondary">
+                          No linkable variables
+                        </div>
+                      ) : (
+                        linkableVariables.map(v => (
+                          <button
+                            key={v.id}
+                            onClick={() => handleLinkToVar(v)}
+                            className="w-full px-3 py-2 text-sm text-left hover:bg-white/5"
+                          >
+                            {v.key} ({v.values.length} values)
+                          </button>
+                        ))
+                      )}
+                    </>
+                  )}
+                  <button
+                    onClick={() => setShowLinkMenu(false)}
+                    className="w-full px-3 py-2 text-sm text-left text-text-secondary hover:bg-white/5 border-t border-border"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="col-span-2 flex items-center justify-end">
+          <button
+            onClick={onDelete}
+            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 rounded text-text-secondary hover:text-red-400"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
-      <div className="col-span-2 flex items-center justify-end">
-        <button
-          onClick={onDelete}
-          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 rounded text-text-secondary hover:text-red-400"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
+      {/* Inline add value row */}
+      {isAddingValue && (
+        <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-primary-500/10 border-t border-primary-500/30">
+          <div className="col-span-2 flex items-center">
+            <span className="text-xs text-text-secondary">New value for {variable.key}:</span>
+          </div>
+          <div className="col-span-6 flex items-center gap-2">
+            <input
+              type="text"
+              value={newValueInput || ''}
+              onChange={(e) => onNewValueChange?.(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onConfirmAddValue?.()
+                if (e.key === 'Escape') onCancelAddValue?.()
+              }}
+              placeholder="Enter new value..."
+              autoFocus
+              className="flex-1 px-2 py-1 text-sm bg-panel border border-primary-500 rounded font-mono"
+            />
+            <button
+              onClick={onConfirmAddValue}
+              disabled={!newValueInput?.trim()}
+              className="px-2 py-1 text-xs bg-primary-600 hover:bg-primary-700 disabled:opacity-50 rounded"
+            >
+              Add
+            </button>
+            <button
+              onClick={onCancelAddValue}
+              className="px-2 py-1 text-xs bg-panel hover:bg-white/10 rounded"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="col-span-4"></div>
+        </div>
+      )}
+    </>
   )
 }

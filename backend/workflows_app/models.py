@@ -1,10 +1,17 @@
 """Workflow models for PostAI."""
 from django.db import models
-from core.models import BaseModel
+from core.models import BaseModel, Workspace
 
 
 class Workflow(BaseModel):
     """Visual workflow definition."""
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='workflows',
+        null=True,  # Nullable initially for migration
+        blank=True
+    )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default='')
     # React Flow compatible structure

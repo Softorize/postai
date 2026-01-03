@@ -1,6 +1,14 @@
 import { create } from 'zustand'
 import { Environment, EnvironmentVariable } from '@/types'
 import { api } from '@/api/client'
+import { useWorkspacesStore } from './workspaces.store'
+
+interface ImportResult {
+  success: boolean
+  environment?: Environment
+  variables_imported?: number
+  error?: string
+}
 
 interface EnvironmentsState {
   environments: Environment[]
@@ -15,12 +23,15 @@ interface EnvironmentsState {
   deleteEnvironment: (id: string) => Promise<void>
   activateEnvironment: (id: string) => Promise<void>
   getActiveEnvironment: () => Promise<Environment | null>
+  importEnvironment: (content: string) => Promise<ImportResult>
 
   // Variable actions (with multi-value support)
   createVariable: (envId: string, data: Partial<EnvironmentVariable>) => Promise<EnvironmentVariable>
   updateVariable: (envId: string, varId: string, data: Partial<EnvironmentVariable>) => Promise<void>
   deleteVariable: (envId: string, varId: string) => Promise<void>
   selectVariableValue: (envId: string, varId: string, index: number) => Promise<void>
+  addVariableValue: (envId: string, varId: string, value: string) => Promise<void>
+  removeVariableValue: (envId: string, varId: string, index: number) => Promise<void>
 
   // Utilities
   resolveVariables: (text: string) => string
@@ -36,7 +47,9 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
   fetchEnvironments: async () => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.get('/environments/')
+      const activeWorkspace = useWorkspacesStore.getState().activeWorkspace
+      const params = activeWorkspace ? { workspace: activeWorkspace.id } : {}
+      const response = await api.get('/environments/', { params })
       const environments = response.data
       const active = environments.find((e: Environment) => e.is_active) || null
       set({ environments, activeEnvironment: active, isLoading: false })
@@ -86,6 +99,24 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
     }
   },
 
+  importEnvironment: async (content) => {
+    try {
+      const response = await api.post('/environments/import/', { content })
+      if (response.data.success) {
+        await get().fetchEnvironments()
+        return {
+          success: true,
+          environment: response.data.environment,
+          variables_imported: response.data.variables_imported,
+        }
+      }
+      return { success: false, error: response.data.error || 'Import failed' }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to import environment'
+      return { success: false, error: errorMessage }
+    }
+  },
+
   createVariable: async (envId, data) => {
     const response = await api.post(`/environments/${envId}/variables/`, data)
     await get().fetchEnvironments()
@@ -104,6 +135,16 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
 
   selectVariableValue: async (envId, varId, index) => {
     await api.post(`/environments/${envId}/variables/${varId}/select-value/`, { index })
+    await get().fetchEnvironments()
+  },
+
+  addVariableValue: async (envId, varId, value) => {
+    await api.post(`/environments/${envId}/variables/${varId}/add-value/`, { value })
+    await get().fetchEnvironments()
+  },
+
+  removeVariableValue: async (envId, varId, index) => {
+    await api.post(`/environments/${envId}/variables/${varId}/remove-value/`, { index })
     await get().fetchEnvironments()
   },
 

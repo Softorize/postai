@@ -2,6 +2,7 @@
 import json
 import re
 from typing import Dict, Any, Optional
+from asgiref.sync import sync_to_async
 from ..providers import get_provider, ChatMessage
 from ..models import AiProvider
 
@@ -54,7 +55,7 @@ async def generate_request_from_text(
         Dict with request configuration (method, url, headers, params, body)
     """
     # Get provider configuration
-    provider_config = AiProvider.objects.get(id=provider_id)
+    provider_config = await sync_to_async(AiProvider.objects.get)(id=provider_id)
     provider = get_provider(
         provider_config.provider_type,
         provider_config.api_key,
@@ -153,7 +154,7 @@ async def analyze_response(
     Returns:
         Analysis text
     """
-    provider_config = AiProvider.objects.get(id=provider_id)
+    provider_config = await sync_to_async(AiProvider.objects.get)(id=provider_id)
     provider = get_provider(
         provider_config.provider_type,
         provider_config.api_key,

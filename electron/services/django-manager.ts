@@ -1,6 +1,7 @@
 import { spawn, ChildProcess, execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
 import { app } from 'electron'
 import http from 'http'
 
@@ -16,6 +17,16 @@ interface DjangoStatus {
   host: string
 }
 
+export class PythonNotFoundError extends Error {
+  constructor(
+    public searchedPaths: string[],
+    public requiredVersion: string = '3.13'
+  ) {
+    super(`Python ${requiredVersion} not found`)
+    this.name = 'PythonNotFoundError'
+  }
+}
+
 export class DjangoManager {
   private process: ChildProcess | null = null
   private port: number
@@ -25,11 +36,41 @@ export class DjangoManager {
   private healthCheckInterval: NodeJS.Timeout | null = null
   private startupTimeout: NodeJS.Timeout | null = null
   private externalMode = false // True if using external Django server
+  private searchedPaths: string[] = []
 
   constructor(options: DjangoManagerOptions = {}) {
     this.port = options.port || 8765
     this.host = options.host || '127.0.0.1'
     this.isDev = options.isDev ?? false
+  }
+
+  /**
+   * Find the bundled postai-server executable
+   */
+  private findBundledServer(): string | null {
+    this.searchedPaths = []
+
+    if (this.isDev) {
+      // Development: Check if bundled server exists in backend/dist
+      const devBundled = path.join(__dirname, '../../backend/dist/postai-server/postai-server')
+      this.searchedPaths.push(devBundled)
+      if (fs.existsSync(devBundled)) {
+        return devBundled
+      }
+      return null // In dev, we'll fall back to Python
+    }
+
+    // Packaged app: Check for bundled server in resources
+    const resourcesPath = process.resourcesPath
+
+    // Primary location: bundled server directory
+    const bundledServer = path.join(resourcesPath, 'postai-server', 'postai-server')
+    this.searchedPaths.push(bundledServer)
+    if (fs.existsSync(bundledServer)) {
+      return bundledServer
+    }
+
+    return null
   }
 
   async start(): Promise<void> {
@@ -48,17 +89,101 @@ export class DjangoManager {
       return
     }
 
+    // Try bundled server first (for packaged app)
+    const bundledServer = this.findBundledServer()
+    if (bundledServer) {
+      console.log(`Starting bundled PostAI server: ${bundledServer}`)
+      return this.startBundledServer(bundledServer)
+    }
+
+    // Fall back to Python-based approach (for development)
     const pythonPath = this.findPythonPath()
 
     // Check if Python exists
-    if (!pythonPath || !fs.existsSync(pythonPath)) {
-      console.log(`Python not found at ${pythonPath}, waiting for external Django server...`)
-      this.externalMode = true
-      // Wait for external server with retries
-      await this.waitForExternalServer()
-      return
+    if (!pythonPath) {
+      console.log('PostAI backend not found. Searched paths:')
+      this.searchedPaths.forEach(p => console.log(`  - ${p}`))
+
+      // Throw detailed error for the UI to display
+      throw new PythonNotFoundError(this.searchedPaths, '3.13')
     }
 
+    return this.startPythonServer(pythonPath)
+  }
+
+  private startBundledServer(serverPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      console.log(`Starting bundled server on ${this.host}:${this.port}`)
+
+      this.process = spawn(
+        serverPath,
+        ['runserver', '--host', this.host, '--port', String(this.port)],
+        {
+          env: {
+            ...process.env,
+            POSTAI_DB_PATH: this.getDatabasePath(),
+          },
+        }
+      )
+
+      this.process.stdout?.on('data', (data) => {
+        const output = data.toString()
+        console.log(`PostAI: ${output}`)
+
+        if (output.includes('Starting PostAI backend') || output.includes('Starting development server') || output.includes('Quit the server')) {
+          this.isReady = true
+          this.startHealthCheck()
+          if (this.startupTimeout) {
+            clearTimeout(this.startupTimeout)
+            this.startupTimeout = null
+          }
+          resolve()
+        }
+      })
+
+      this.process.stderr?.on('data', (data) => {
+        const output = data.toString()
+        console.log(`PostAI: ${output}`)
+
+        if (output.includes('Starting PostAI backend') || output.includes('Starting development server') || output.includes('Quit the server')) {
+          this.isReady = true
+          this.startHealthCheck()
+          if (this.startupTimeout) {
+            clearTimeout(this.startupTimeout)
+            this.startupTimeout = null
+          }
+          resolve()
+        }
+      })
+
+      this.process.on('error', (error) => {
+        console.error('Failed to start PostAI server:', error)
+        reject(error)
+      })
+
+      this.process.on('exit', (code) => {
+        console.log(`PostAI server exited with code ${code}`)
+        this.isReady = false
+        this.process = null
+        this.stopHealthCheck()
+      })
+
+      // Timeout for startup
+      this.startupTimeout = setTimeout(() => {
+        this.checkHealth().then((healthy) => {
+          if (healthy) {
+            this.isReady = true
+            this.startHealthCheck()
+            resolve()
+          } else {
+            reject(new Error('PostAI server startup timeout'))
+          }
+        })
+      }, 15000)
+    })
+  }
+
+  private startPythonServer(pythonPath: string): Promise<void> {
     const backendPath = this.getBackendPath()
     const managePyPath = path.join(backendPath, 'manage.py')
 
@@ -241,17 +366,112 @@ export class DjangoManager {
     return `http://${this.host}:${this.port}`
   }
 
-  private findPythonPath(): string {
+  private findPythonPath(): string | null {
+    // Append to searchedPaths (already initialized by findBundledServer)
+    const homeDir = os.homedir()
+
     if (this.isDev) {
       // Development: Use venv Python
       const venvPython = path.join(this.getBackendPath(), '.venv', 'bin', 'python')
-      return venvPython
-    } else {
-      // Packaged app: Python is in resources
-      const resourcesPath = process.resourcesPath
-      return path.join(resourcesPath, 'python', 'venv', 'bin', 'python')
+      this.searchedPaths.push(venvPython)
+      if (fs.existsSync(venvPython)) {
+        return venvPython
+      }
+      return null
     }
+
+    // Packaged app: Check multiple locations
+    const resourcesPath = process.resourcesPath
+
+    // 1. First try bundled Python
+    const bundledPython = path.join(resourcesPath, 'python', 'venv', 'bin', 'python')
+    this.searchedPaths.push(bundledPython)
+    if (fs.existsSync(bundledPython)) {
+      return bundledPython
+    }
+
+    // 2. Try backend's venv if it was bundled (check if symlink target exists)
+    const backendVenv = path.join(resourcesPath, 'backend', '.venv', 'bin', 'python')
+    this.searchedPaths.push(backendVenv)
+    if (fs.existsSync(backendVenv)) {
+      // Check if it's a symlink and the target exists
+      try {
+        const realPath = fs.realpathSync(backendVenv)
+        if (fs.existsSync(realPath)) {
+          return backendVenv
+        }
+        this.searchedPaths.push(`${backendVenv} -> ${realPath} (broken symlink)`)
+      } catch {
+        // Symlink target doesn't exist
+      }
+    }
+
+    // 3. Check pyenv installations (Python 3.13.x)
+    const pyenvRoot = process.env.PYENV_ROOT || path.join(homeDir, '.pyenv')
+    const pyenvVersionsDir = path.join(pyenvRoot, 'versions')
+    if (fs.existsSync(pyenvVersionsDir)) {
+      try {
+        const versions = fs.readdirSync(pyenvVersionsDir)
+          .filter(v => v.startsWith('3.13'))
+          .sort()
+          .reverse() // Get highest version first
+
+        for (const version of versions) {
+          const pyenvPython = path.join(pyenvVersionsDir, version, 'bin', 'python')
+          this.searchedPaths.push(pyenvPython)
+          if (fs.existsSync(pyenvPython)) {
+            console.log(`Using pyenv Python: ${pyenvPython}`)
+            return pyenvPython
+          }
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
+    // 4. Check Python.framework (from python.org installer)
+    const frameworkPython = '/Library/Frameworks/Python.framework/Versions/3.13/bin/python3'
+    this.searchedPaths.push(frameworkPython)
+    if (fs.existsSync(frameworkPython)) {
+      console.log(`Using Python.framework: ${frameworkPython}`)
+      return frameworkPython
+    }
+
+    // 5. Check Homebrew locations
+    const homebrewPaths = [
+      '/opt/homebrew/bin/python3.13',  // Apple Silicon
+      '/usr/local/bin/python3.13',      // Intel
+      '/opt/homebrew/opt/python@3.13/bin/python3.13',
+      '/usr/local/opt/python@3.13/bin/python3.13',
+    ]
+    for (const brewPython of homebrewPaths) {
+      this.searchedPaths.push(brewPython)
+      if (fs.existsSync(brewPython)) {
+        console.log(`Using Homebrew Python: ${brewPython}`)
+        return brewPython
+      }
+    }
+
+    // 6. Last resort: system Python3 (may not have required packages)
+    try {
+      const systemPython = execSync('which python3', { encoding: 'utf8' }).trim()
+      if (systemPython) {
+        this.searchedPaths.push(systemPython)
+        // Check Python version
+        const versionOutput = execSync(`${systemPython} --version`, { encoding: 'utf8' }).trim()
+        if (versionOutput.includes('3.13')) {
+          console.log(`Using system Python: ${systemPython}`)
+          return systemPython
+        }
+        this.searchedPaths.push(`${systemPython} (${versionOutput} - need 3.13)`)
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    return null
   }
+
 
   private getBackendPath(): string {
     if (this.isDev) {

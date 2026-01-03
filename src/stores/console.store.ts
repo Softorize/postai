@@ -5,6 +5,7 @@ export interface ConsoleEntry {
   timestamp: Date
   method: string
   url: string
+  name?: string // Request name
   status?: number
   statusText?: string
   time?: number
@@ -15,12 +16,16 @@ export interface ConsoleEntry {
   requestBody?: string
   responseHeaders?: Record<string, string>
   responseBody?: string
+  // Network info
+  remoteAddress?: string
+  protocol?: string
 }
 
 interface ConsoleState {
   entries: ConsoleEntry[]
   isVisible: boolean
   maxEntries: number
+  searchQuery: string
 
   // Actions
   addEntry: (entry: Omit<ConsoleEntry, 'id' | 'timestamp'>) => string
@@ -28,12 +33,14 @@ interface ConsoleState {
   clearEntries: () => void
   toggleVisibility: () => void
   setVisibility: (visible: boolean) => void
+  setSearchQuery: (query: string) => void
 }
 
 export const useConsoleStore = create<ConsoleState>((set) => ({
   entries: [],
   isVisible: true,
   maxEntries: 100,
+  searchQuery: '',
 
   addEntry: (entry) => {
     const id = crypto.randomUUID()
@@ -69,5 +76,9 @@ export const useConsoleStore = create<ConsoleState>((set) => ({
 
   setVisibility: (visible) => {
     set({ isVisible: visible })
+  },
+
+  setSearchQuery: (query) => {
+    set({ searchQuery: query })
   },
 }))

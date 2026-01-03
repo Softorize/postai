@@ -5,11 +5,21 @@ export interface BaseModel {
   updated_at: string
 }
 
+// Workspace types
+export interface Workspace extends BaseModel {
+  name: string
+  description: string
+  is_active: boolean
+  collections_count?: number
+  environments_count?: number
+}
+
 // HTTP Methods
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
 // Collection types
 export interface Collection extends BaseModel {
+  workspace?: string
   name: string
   description: string
   postman_id?: string
@@ -86,7 +96,7 @@ export interface FormDataItem extends KeyValuePair {
 }
 
 // Auth types
-export type AuthType = 'none' | 'basic' | 'bearer' | 'oauth2' | 'apikey'
+export type AuthType = 'none' | 'basic' | 'bearer' | 'oauth2' | 'apikey' | 'hmac'
 
 export interface AuthConfig {
   type: AuthType
@@ -104,11 +114,35 @@ export interface AuthConfig {
   }
   oauth2?: {
     grantType: 'authorization_code' | 'client_credentials' | 'password'
+    authorizationUrl?: string  // For authorization_code flow
     accessTokenUrl: string
     clientId: string
     clientSecret: string
     scope: string
+    redirectUri?: string  // For authorization_code flow
+    state?: string  // For authorization_code flow
+    // For password grant type
+    username?: string
+    password?: string
+    // Token storage
     token?: string
+    refreshToken?: string
+    tokenType?: string
+    expiresAt?: number
+  }
+  hmac?: {
+    algorithm: 'sha256' | 'sha512' | 'sha1' | 'md5'
+    secretKey: string
+    // What to include in the signature
+    signatureComponents: ('method' | 'path' | 'timestamp' | 'body' | 'nonce')[]
+    // Where to put the signature
+    signatureHeader: string
+    // Optional timestamp header
+    timestampHeader?: string
+    // Optional nonce header
+    nonceHeader?: string
+    // Encoding for the signature
+    encoding: 'hex' | 'base64'
   }
 }
 
@@ -130,6 +164,7 @@ export interface EnvironmentVariable extends BaseModel {
   description: string
   is_secret: boolean
   enabled: boolean
+  link_group?: string | null  // Variables with same link_group sync their selected_value_index
 }
 
 // Request History
@@ -268,7 +303,7 @@ export interface McpPrompt {
 }
 
 // AI types
-export type AiProviderType = 'anthropic' | 'deepseek' | 'openai' | 'custom'
+export type AiProviderType = 'anthropic' | 'deepseek' | 'openai' | 'copilot' | 'custom'
 
 export interface AiProvider extends BaseModel {
   name: string

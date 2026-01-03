@@ -27,7 +27,7 @@ interface AiState {
   fetchConversations: () => Promise<void>
   createConversation: (title: string, context?: Record<string, unknown>) => Promise<AiConversation>
   deleteConversation: (id: string) => Promise<void>
-  setActiveConversation: (id: string | null) => void
+  setActiveConversation: (id: string | null) => Promise<void>
 
   sendMessage: (message: string) => Promise<string>
   updateConversationContext: (context: Record<string, unknown>) => Promise<void>
@@ -168,8 +168,22 @@ export const useAiStore = create<AiState>((set, get) => ({
     }
   },
 
-  setActiveConversation: (id) => {
+  setActiveConversation: async (id) => {
     set({ activeConversationId: id })
+
+    // Fetch full conversation details including messages
+    if (id) {
+      try {
+        const response = await api.get(`/ai/conversations/${id}/`)
+        set(state => ({
+          conversations: state.conversations.map(c =>
+            c.id === id ? response.data : c
+          )
+        }))
+      } catch (error) {
+        console.error('Failed to fetch conversation details:', error)
+      }
+    }
   },
 
   sendMessage: async (message) => {

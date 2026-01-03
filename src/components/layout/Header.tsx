@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Settings, Wifi, WifiOff, Bot } from 'lucide-react'
 import { useBackendStore } from '@/stores/backend.store'
 import { useAiStore } from '@/stores/ai.store'
+import { WorkspaceSelector } from '../workspaces/WorkspaceSelector'
 import { EnvironmentSelector } from '../environments/EnvironmentSelector'
 import { AiProviderSettings } from '../ai/AiProviderSettings'
 
@@ -24,6 +25,11 @@ export function Header() {
             <span className="text-white text-xs font-bold">P</span>
           </div>
           <span className="font-semibold text-sm">PostAI</span>
+        </div>
+
+        {/* Workspace selector */}
+        <div className="no-drag ml-4">
+          <WorkspaceSelector />
         </div>
 
         {/* Spacer */}

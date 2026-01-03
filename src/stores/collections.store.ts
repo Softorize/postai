@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { Collection, Folder, Request } from '@/types'
 import { api } from '@/api/client'
+import { useWorkspacesStore } from './workspaces.store'
 
 interface CollectionsState {
   collections: Collection[]
@@ -39,7 +40,9 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
   fetchCollections: async () => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.get('/collections/')
+      const activeWorkspace = useWorkspacesStore.getState().activeWorkspace
+      const params = activeWorkspace ? { workspace: activeWorkspace.id } : {}
+      const response = await api.get('/collections/', { params })
       set({ collections: response.data, isLoading: false })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch collections'

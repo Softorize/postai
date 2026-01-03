@@ -85,7 +85,25 @@ class WorkflowExecutor:
                 return NodeExecutionResult(success=True, output={'message': 'Workflow started'})
 
             elif node_type == 'end':
-                return NodeExecutionResult(success=True, output={'message': 'Workflow completed'})
+                # Get the result variable if specified
+                result_variable = node_data.get('result_variable', '')
+                result_label = node_data.get('result_label', 'Result')
+
+                end_output = {
+                    'message': 'Workflow completed',
+                    'result_label': result_label,
+                }
+
+                if result_variable:
+                    # Resolve the result variable
+                    result_value = self._resolve_variables(f'{{{{{result_variable}}}}}', context)
+                    # If it resolved to the same string, try direct lookup
+                    if result_value == f'{{{{{result_variable}}}}}':
+                        result_value = context.variables.get(result_variable)
+                    end_output['result_variable'] = result_variable
+                    end_output['result'] = result_value
+
+                return NodeExecutionResult(success=True, output=end_output)
 
             elif node_type == 'request':
                 result = await self._execute_request_node(node_data, context)
@@ -106,11 +124,17 @@ class WorkflowExecutor:
 
             elif node_type == 'variable':
                 var_name = node_data.get('name', '')
-                var_value = self._resolve_variables(node_data.get('value', ''), context)
+                original_value = node_data.get('value', '')
+                var_value = self._resolve_variables(original_value, context)
                 context.variables[var_name] = var_value
                 return NodeExecutionResult(
                     success=True,
-                    output={'variable': var_name, 'value': var_value}
+                    output={
+                        'variable': var_name,
+                        'original': original_value,
+                        'resolved': var_value,
+                        'available_vars': list(context.variables.keys())
+                    }
                 )
 
             elif node_type == 'script':
@@ -151,13 +175,33 @@ class WorkflowExecutor:
 
         method = node_data.get('method', 'GET').upper()
         url = self._resolve_variables(node_data.get('url', ''), context)
+
+        # Start with base headers from the request
         headers = {
             k: self._resolve_variables(v, context)
             for k, v in node_data.get('headers', {}).items()
         }
-        body = node_data.get('body')
-        if body and isinstance(body, str):
-            body = self._resolve_variables(body, context)
+
+        # Apply custom headers (override or add)
+        custom_headers = node_data.get('custom_headers', [])
+        for header in custom_headers:
+            key = header.get('key', '').strip()
+            value = header.get('value', '')
+            if key:
+                headers[key] = self._resolve_variables(value, context)
+
+        # Use custom_body if provided, otherwise use the request's body
+        custom_body = node_data.get('custom_body')
+        if custom_body and isinstance(custom_body, str) and custom_body.strip():
+            body = self._resolve_variables(custom_body, context)
+        else:
+            body = node_data.get('body')
+            if body and isinstance(body, str):
+                body = self._resolve_variables(body, context)
+
+        # Auto-add Content-Type header for JSON body if not already set
+        if body and 'Content-Type' not in headers and 'content-type' not in headers:
+            headers['Content-Type'] = 'application/json'
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -175,7 +219,9 @@ class WorkflowExecutor:
                     'status_code': response.status_code,
                     'headers': dict(response.headers),
                     'body': response.text,
-                    'time_ms': execution_time
+                    'time_ms': execution_time,
+                    'request_headers': headers,  # Debug: show what headers were sent
+                    'request_url': url,  # Debug: show resolved URL
                 }
 
                 # Auto-assign to variable if specified
@@ -236,20 +282,63 @@ class WorkflowExecutor:
         )
 
     def _resolve_variables(self, text: str, context: WorkflowContext) -> str:
-        """Replace {{variable}} placeholders with actual values."""
+        """Replace {{variable}} or {{variable.path.to.value}} placeholders with actual values."""
         if not isinstance(text, str):
             return text
 
         import re
-        pattern = r'\{\{(\w+)\}\}'
+        import json as json_module
+
+        # Pattern supports nested paths like {{resp.body.token}}
+        pattern = r'\{\{([\w.]+)\}\}'
+
+        def get_nested_value(obj: Any, path: str) -> Any:
+            """Get a nested value from dict/object using dot notation."""
+            parts = path.split('.')
+            current = obj
+
+            for part in parts:
+                if current is None:
+                    return None
+                if isinstance(current, dict):
+                    current = current.get(part)
+                elif isinstance(current, str):
+                    # Try to parse as JSON if accessing nested property
+                    try:
+                        parsed = json_module.loads(current)
+                        if isinstance(parsed, dict):
+                            current = parsed.get(part)
+                        else:
+                            return None
+                    except (json_module.JSONDecodeError, TypeError):
+                        return None
+                else:
+                    return None
+            return current
 
         def replace_var(match):
-            var_name = match.group(1)
-            value = context.variables.get(var_name, match.group(0))
-            if isinstance(value, (dict, list)):
-                import json
-                return json.dumps(value)
-            return str(value)
+            var_path = match.group(1)
+
+            # Check if it's a nested path
+            if '.' in var_path:
+                parts = var_path.split('.', 1)
+                root_var = parts[0]
+                nested_path = parts[1]
+
+                root_value = context.variables.get(root_var)
+                if root_value is not None:
+                    nested_value = get_nested_value(root_value, nested_path)
+                    if nested_value is not None:
+                        if isinstance(nested_value, (dict, list)):
+                            return json_module.dumps(nested_value)
+                        return str(nested_value)
+
+                return match.group(0)  # Return original if not found
+            else:
+                value = context.variables.get(var_path, match.group(0))
+                if isinstance(value, (dict, list)):
+                    return json_module.dumps(value)
+                return str(value)
 
         return re.sub(pattern, replace_var, text)
 

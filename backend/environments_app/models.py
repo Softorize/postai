@@ -1,10 +1,17 @@
 """Environment models for PostAI with multi-value variable support."""
 from django.db import models
-from core.models import BaseModel
+from core.models import BaseModel, Workspace
 
 
 class Environment(BaseModel):
     """Environment configuration."""
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='environments',
+        null=True,  # Nullable initially for migration
+        blank=True
+    )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default='')
     is_active = models.BooleanField(default=False)
@@ -44,6 +51,8 @@ class EnvironmentVariable(BaseModel):
     description = models.TextField(blank=True, default='')
     is_secret = models.BooleanField(default=False)
     enabled = models.BooleanField(default=True)
+    # Link group: variables with same link_group sync their selected_value_index
+    link_group = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
         ordering = ['key']
@@ -75,8 +84,24 @@ class EnvironmentVariable(BaseModel):
                 self.selected_value_index = max(0, len(self.values) - 1)
             self.save()
 
-    def select_value(self, index):
-        """Select a value by index."""
+    def select_value(self, index, sync_linked=True):
+        """Select a value by index.
+
+        If sync_linked is True and this variable is part of a link_group,
+        all other variables in the same group will also be updated to the same index.
+        """
         if self.values and 0 <= index < len(self.values):
             self.selected_value_index = index
             self.save()
+
+            # Sync linked variables
+            if sync_linked and self.link_group:
+                linked_vars = EnvironmentVariable.objects.filter(
+                    environment=self.environment,
+                    link_group=self.link_group
+                ).exclude(pk=self.pk)
+
+                for var in linked_vars:
+                    if var.values and 0 <= index < len(var.values):
+                        var.selected_value_index = index
+                        var.save()

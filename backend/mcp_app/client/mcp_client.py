@@ -264,14 +264,17 @@ async def test_mcp_connection(
         env_vars=env_vars
     )
 
-    try:
+    result_data: Dict[str, Any] = {}
+
+    async def do_connect():
+        nonlocal result_data
         async with asyncio.timeout(timeout):
             async with client.connect():
                 tools = await client.list_tools()
                 resources = await client.list_resources()
                 prompts = await client.list_prompts()
 
-                return {
+                result_data = {
                     'success': True,
                     'tools': [
                         {'name': t.name, 'description': t.description, 'inputSchema': t.input_schema}
@@ -286,13 +289,22 @@ async def test_mcp_connection(
                         for p in prompts
                     ]
                 }
+
+    try:
+        await do_connect()
     except asyncio.TimeoutError:
-        return {
-            'success': False,
-            'error': 'Connection timed out'
-        }
+        if result_data.get('success'):
+            return result_data
+        return {'success': False, 'error': 'Connection timed out'}
+    except BaseExceptionGroup as eg:
+        # Handle asyncio TaskGroup exceptions - if we got data, cleanup error is ok
+        if result_data.get('success'):
+            return result_data
+        errors = [str(exc) for exc in eg.exceptions]
+        return {'success': False, 'error': '; '.join(errors) if errors else str(eg)}
     except Exception as e:
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        if result_data.get('success'):
+            return result_data
+        return {'success': False, 'error': str(e)}
+
+    return result_data

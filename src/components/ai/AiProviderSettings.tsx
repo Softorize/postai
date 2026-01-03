@@ -13,13 +13,15 @@ const PROVIDER_TYPES: { value: AiProviderType; label: string; defaultUrl: string
   { value: 'anthropic', label: 'Anthropic (Claude)', defaultUrl: '' },
   { value: 'deepseek', label: 'DeepSeek', defaultUrl: 'https://api.deepseek.com/v1' },
   { value: 'openai', label: 'OpenAI', defaultUrl: 'https://api.openai.com/v1' },
+  { value: 'copilot', label: 'GitHub Copilot', defaultUrl: 'https://api.githubcopilot.com' },
   { value: 'custom', label: 'Custom Provider', defaultUrl: '' },
 ]
 
 const DEFAULT_MODELS: Record<AiProviderType, string> = {
   anthropic: 'claude-sonnet-4-20250514',
   deepseek: 'deepseek-chat',
-  openai: 'gpt-4',
+  openai: 'gpt-4o',
+  copilot: 'gpt-4o',
   custom: '',
 }
 
@@ -268,7 +270,7 @@ export function AiProviderSettings({ isOpen, onClose }: Props) {
                 </div>
               </div>
 
-              {(formData.provider_type === 'custom' || formData.provider_type === 'deepseek') && (
+              {(formData.provider_type === 'custom' || formData.provider_type === 'deepseek' || formData.provider_type === 'copilot' || formData.provider_type === 'openai') && (
                 <div>
                   <label className="block text-sm font-medium mb-1">API Base URL</label>
                   <input
