@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Plus, Trash2, Check, AlertCircle, Eye, EyeOff, Github, LogOut, Copy, ExternalLink, Loader2 } from 'lucide-react'
 import { useAiStore } from '../../stores/ai.store'
-import { AiProviderType, GitHubDeviceCodeResponse } from '../../types'
+import { AiProviderType } from '../../types'
 import { cn } from '../../lib/utils'
 
 interface Props {
