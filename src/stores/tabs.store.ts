@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Request, Workflow, Environment, HttpMethod, KeyValuePair, RequestBody, AuthConfig } from '@/types'
+import { Request, Workflow, Environment, HttpMethod, KeyValuePair, RequestBody, AuthConfig, Response } from '@/types'
 
 export type TabType = 'request' | 'workflow' | 'mcp' | 'ai' | 'environments' | 'environment'
 
@@ -22,11 +22,19 @@ export interface Tab {
   data?: Request | Workflow | Environment | null
   isDirty?: boolean
   draft?: RequestDraft  // Store unsaved changes
+  historicalResponse?: Response  // For history entries - the response that was received
+}
+
+interface WorkspaceTabs {
+  tabs: Tab[]
+  activeTabId: string | null
 }
 
 interface TabsState {
   tabs: Tab[]
   activeTabId: string | null
+  currentWorkspaceId: string | null
+  workspaceTabs: Map<string, WorkspaceTabs>
 
   // Actions
   openTab: (tab: Omit<Tab, 'id'>) => string
@@ -37,6 +45,7 @@ interface TabsState {
   updateTab: (id: string, data: Partial<Tab>) => void
   getTab: (id: string) => Tab | undefined
   hasUnsavedTabs: () => boolean
+  switchWorkspace: (workspaceId: string | null) => void
 }
 
 let tabIdCounter = 0
@@ -45,6 +54,8 @@ const generateTabId = () => `tab-${++tabIdCounter}`
 export const useTabsStore = create<TabsState>((set, get) => ({
   tabs: [],
   activeTabId: null,
+  currentWorkspaceId: null,
+  workspaceTabs: new Map(),
 
   openTab: (tabData) => {
     const { tabs } = get()
@@ -120,5 +131,25 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
   hasUnsavedTabs: () => {
     return get().tabs.some((t) => t.isDirty)
+  },
+
+  switchWorkspace: (workspaceId: string | null) => {
+    const { tabs, activeTabId, currentWorkspaceId, workspaceTabs } = get()
+    const newWorkspaceTabs = new Map(workspaceTabs)
+
+    // Save current workspace tabs (use 'default' for null workspace)
+    const currentKey = currentWorkspaceId || 'default'
+    newWorkspaceTabs.set(currentKey, { tabs, activeTabId })
+
+    // Load new workspace tabs
+    const newKey = workspaceId || 'default'
+    const savedTabs = newWorkspaceTabs.get(newKey)
+
+    set({
+      currentWorkspaceId: workspaceId,
+      workspaceTabs: newWorkspaceTabs,
+      tabs: savedTabs?.tabs || [],
+      activeTabId: savedTabs?.activeTabId || null,
+    })
   },
 }))

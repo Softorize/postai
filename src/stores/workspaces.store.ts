@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { Workspace } from '@/types'
 import { api } from '@/api/client'
+import { useTabsStore } from './tabs.store'
 
 interface WorkspacesState {
   workspaces: Workspace[]
@@ -30,6 +31,12 @@ export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
       const workspaces = response.data
       const active = workspaces.find((w: Workspace) => w.is_active) || null
       set({ workspaces, activeWorkspace: active, isLoading: false })
+
+      // Initialize tabs store with current workspace (only on first load)
+      const tabsStore = useTabsStore.getState()
+      if (tabsStore.currentWorkspaceId === null && active) {
+        tabsStore.switchWorkspace(active.id)
+      }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch workspaces'
       set({ error: errorMessage, isLoading: false })
@@ -64,6 +71,8 @@ export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
   activateWorkspace: async (id) => {
     await api.post(`/workspaces/${id}/activate/`)
     await get().fetchWorkspaces()
+    // Switch tabs to the new workspace
+    useTabsStore.getState().switchWorkspace(id)
   },
 
   getActiveWorkspace: async () => {

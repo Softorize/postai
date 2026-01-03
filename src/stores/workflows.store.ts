@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import api from '../api/client'
-import { Workflow, WorkflowNode, WorkflowEdge, WorkflowExecution } from '../types'
+import { Workflow, WorkflowNode, WorkflowEdge, WorkflowExecution, Request } from '../types'
 import { useWorkspacesStore } from './workspaces.store'
 
 interface WorkflowsState {
@@ -27,6 +27,7 @@ interface WorkflowsState {
   addNode: (node: WorkflowNode) => void
   deleteNode: (nodeId: string) => void
   updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
+  addNodeToWorkflow: (workflowId: string, request: Request) => Promise<void>
 
   // Execution
   executeWorkflow: (id: string, inputVariables?: Record<string, unknown>, environmentId?: string) => Promise<WorkflowExecution>
@@ -240,6 +241,71 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
         n.id === nodeId ? { ...n, data: { ...n.data, ...data } } : n
       )
       get().updateNodes(nodes)
+    }
+  },
+
+  addNodeToWorkflow: async (workflowId, request) => {
+    try {
+      // Fetch the workflow to get current nodes
+      const response = await api.get(`/workflows/workflows/${workflowId}/`)
+      const workflow = response.data
+
+      // Find the end node to position the new node above it
+      const endNode = workflow.nodes.find((n: WorkflowNode) => n.type === 'end')
+      const existingNodes = workflow.nodes.filter((n: WorkflowNode) => n.type !== 'start' && n.type !== 'end')
+
+      // Calculate position - place between existing nodes and end node
+      const newY = endNode
+        ? endNode.position.y - 150
+        : 200 + (existingNodes.length * 100)
+
+      // Create HTTP Request node with the correct data structure for RequestNode component
+      const newNode: WorkflowNode = {
+        id: `request-${Date.now()}`,
+        type: 'request',
+        position: { x: endNode?.position.x || 250, y: newY },
+        data: {
+          node_name: request.name,
+          method: request.method,
+          url: request.url,
+          request_name: request.name,
+          request_id: request.id,
+          collection_id: request.collection,
+          output_variable: '',
+          // Store full request config for execution
+          headers: request.headers || [],
+          params: request.params || [],
+          body: request.body || { type: 'none', content: '' },
+          auth: request.auth,
+        }
+      }
+
+      // Move end node down if it exists
+      const updatedNodes = workflow.nodes.map((n: WorkflowNode) => {
+        if (n.type === 'end') {
+          return { ...n, position: { ...n.position, y: n.position.y + 150 } }
+        }
+        return n
+      })
+
+      // Add the new node
+      updatedNodes.push(newNode)
+
+      // Save to server
+      await api.patch(`/workflows/workflows/${workflowId}/`, { nodes: updatedNodes })
+
+      // Update local state if this is the active workflow
+      const { activeWorkflowId } = get()
+      if (activeWorkflowId === workflowId) {
+        set(state => ({
+          activeWorkflow: state.activeWorkflow
+            ? { ...state.activeWorkflow, nodes: updatedNodes }
+            : null
+        }))
+      }
+    } catch (error: any) {
+      set({ error: error.message })
+      throw error
     }
   },
 

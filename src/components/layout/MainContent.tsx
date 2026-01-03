@@ -71,6 +71,38 @@ export function MainContent() {
             {tabs.map((tab) => {
               const isActive = activeTabId === tab.id
               const hasCollection = tab.type === 'request' && tab.data && (tab.data as Request).collection
+              const isHistoryTab = tab.type === 'request' && tab.historicalResponse
+              const isEnvironmentTab = tab.type === 'environment' || tab.type === 'environments'
+              const isWorkflowTab = tab.type === 'workflow'
+              const isMcpTab = tab.type === 'mcp'
+
+              // Get tab-specific styling
+              const getTabStyle = () => {
+                if (isHistoryTab) {
+                  return isActive
+                    ? 'bg-amber-500/20 text-text-primary shadow-sm border border-amber-500/30'
+                    : 'bg-amber-500/10 text-text-secondary hover:text-text-primary hover:bg-amber-500/15 border border-amber-500/20'
+                }
+                if (isEnvironmentTab) {
+                  return isActive
+                    ? 'bg-emerald-500/20 text-text-primary shadow-sm border border-emerald-500/30'
+                    : 'bg-emerald-500/10 text-text-secondary hover:text-text-primary hover:bg-emerald-500/15 border border-emerald-500/20'
+                }
+                if (isWorkflowTab) {
+                  return isActive
+                    ? 'bg-purple-500/20 text-text-primary shadow-sm border border-purple-500/30'
+                    : 'bg-purple-500/10 text-text-secondary hover:text-text-primary hover:bg-purple-500/15 border border-purple-500/20'
+                }
+                if (isMcpTab) {
+                  return isActive
+                    ? 'bg-cyan-500/20 text-text-primary shadow-sm border border-cyan-500/30'
+                    : 'bg-cyan-500/10 text-text-secondary hover:text-text-primary hover:bg-cyan-500/15 border border-cyan-500/20'
+                }
+                // Default request tab
+                return isActive
+                  ? 'bg-white/10 text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
+              }
 
               return (
                 <div
@@ -82,11 +114,9 @@ export function MainContent() {
                   onClick={() => setActiveTab(tab.id)}
                   className={clsx(
                     'group flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-lg cursor-pointer transition-all duration-150 flex-shrink-0 min-w-[80px] max-w-[180px]',
-                    isActive
-                      ? 'bg-white/10 text-text-primary shadow-sm'
-                      : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
+                    getTabStyle()
                   )}
-                  title={tab.title}
+                  title={isHistoryTab ? `${tab.title} (from history)` : tab.title}
                 >
                   {/* Method badge */}
                   {tab.type === 'request' && tab.data && (
@@ -149,7 +179,10 @@ export function MainContent() {
               />
             )}
             {activeTab.type === 'workflow' && (
-              <WorkflowBuilder />
+              <WorkflowBuilder
+                key={`workflow-${(activeTab.data as { id: string })?.id || activeTab.id}`}
+                workflowId={(activeTab.data as { id: string })?.id}
+              />
             )}
             {activeTab.type === 'mcp' && (
               <McpManager />

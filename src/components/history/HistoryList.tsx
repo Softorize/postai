@@ -55,7 +55,17 @@ export function HistoryList({ searchQuery = '' }: HistoryListProps) {
       language: 'json' as const,
     }
 
-    // Open as a new request tab with the full history data
+    // Prepare historical response
+    const historicalResponse = detail.status_code ? {
+      status_code: detail.status_code,
+      status_text: detail.status_text,
+      headers: detail.response_headers,
+      body: detail.response_body,
+      size: entry.response_size,
+      time: entry.response_time,
+    } : undefined
+
+    // Open as a new request tab with the full history data including response
     openTab({
       type: 'request',
       title: `${entry.method} ${urlObj.pathname}`,
@@ -67,6 +77,7 @@ export function HistoryList({ searchQuery = '' }: HistoryListProps) {
         params,
         body,
       } as never,
+      historicalResponse,
     })
   }
 

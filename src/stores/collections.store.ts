@@ -3,6 +3,8 @@ import { Collection, Folder, Request } from '@/types'
 import { api } from '@/api/client'
 import { useWorkspacesStore } from './workspaces.store'
 
+export type SidebarTab = 'collections' | 'environments' | 'history' | 'mcp' | 'workflows'
+
 interface CollectionsState {
   collections: Collection[]
   selectedCollection: Collection | null
@@ -13,11 +15,13 @@ interface CollectionsState {
   // UI state - track expanded collections/folders by ID
   expandedIds: Set<string>
   highlightedRequestId: string | null
+  sidebarActiveTab: SidebarTab
 
   // Actions
   fetchCollections: () => Promise<void>
   toggleExpanded: (id: string) => void
   setExpanded: (id: string, expanded: boolean) => void
+  setSidebarTab: (tab: SidebarTab) => void
   revealRequest: (requestId: string) => void
   clearHighlight: () => void
   createCollection: (name: string, description?: string) => Promise<Collection>
@@ -46,6 +50,11 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
   error: null,
   expandedIds: new Set<string>(),
   highlightedRequestId: null,
+  sidebarActiveTab: 'collections',
+
+  setSidebarTab: (tab: SidebarTab) => {
+    set({ sidebarActiveTab: tab })
+  },
 
   toggleExpanded: (id: string) => {
     set((state) => {
@@ -98,7 +107,7 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
       // Check root-level requests
       if (collection.requests?.some(r => !r.folder && r.id === requestId)) {
         newExpandedIds.add(collection.id)
-        set({ expandedIds: newExpandedIds, highlightedRequestId: requestId })
+        set({ expandedIds: newExpandedIds, highlightedRequestId: requestId, sidebarActiveTab: 'collections' })
         // Clear highlight after animation
         setTimeout(() => set({ highlightedRequestId: null }), 2000)
         return
@@ -109,7 +118,7 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
       if (path) {
         // Expand all folders in the path
         path.forEach(id => newExpandedIds.add(id))
-        set({ expandedIds: newExpandedIds, highlightedRequestId: requestId })
+        set({ expandedIds: newExpandedIds, highlightedRequestId: requestId, sidebarActiveTab: 'collections' })
         // Clear highlight after animation
         setTimeout(() => set({ highlightedRequestId: null }), 2000)
         return

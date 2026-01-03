@@ -4,6 +4,7 @@ import {
   Globe,
   History,
   Server,
+  GitBranch,
   Plus,
   Upload,
   Search,
@@ -13,25 +14,24 @@ import { CollectionTree } from '../collections/CollectionTree'
 import { EnvironmentList } from '../environments/EnvironmentList'
 import { HistoryList } from '../history/HistoryList'
 import { McpList } from '../mcp/McpList'
+import { WorkflowList } from '../workflow/WorkflowList'
 import { ImportDialog } from '../collections/ImportDialog'
 import { InputDialog } from '../common/InputDialog'
-import { useCollectionsStore } from '@/stores/collections.store'
-
-type SidebarTab = 'collections' | 'environments' | 'history' | 'mcp'
+import { useCollectionsStore, SidebarTab } from '@/stores/collections.store'
 
 const tabs: { id: SidebarTab; icon: React.ElementType; label: string }[] = [
   { id: 'collections', icon: FolderOpen, label: 'Collections' },
   { id: 'environments', icon: Globe, label: 'Environments' },
   { id: 'history', icon: History, label: 'History' },
+  { id: 'workflows', icon: GitBranch, label: 'Workflows' },
   { id: 'mcp', icon: Server, label: 'MCP' },
 ]
 
 export function Sidebar() {
-  const [activeTab, setActiveTab] = useState<SidebarTab>('collections')
+  const { createCollection, sidebarActiveTab, setSidebarTab } = useCollectionsStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [showNewCollectionDialog, setShowNewCollectionDialog] = useState(false)
-  const { createCollection } = useCollectionsStore()
 
   const handleNewCollection = () => {
     setShowNewCollectionDialog(true)
@@ -53,10 +53,10 @@ export function Sidebar() {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => setSidebarTab(tab.id)}
             className={clsx(
               'flex-1 flex items-center justify-center py-2 transition-colors',
-              activeTab === tab.id
+              sidebarActiveTab === tab.id
                 ? 'text-primary-400 border-b-2 border-primary-400'
                 : 'text-text-secondary hover:text-text-primary'
             )}
@@ -82,7 +82,7 @@ export function Sidebar() {
       </div>
 
       {/* Actions bar for collections */}
-      {activeTab === 'collections' && (
+      {sidebarActiveTab === 'collections' && (
         <div className="flex gap-1 p-2 border-b border-border">
           <button
             onClick={handleNewCollection}
@@ -103,10 +103,11 @@ export function Sidebar() {
 
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
-        {activeTab === 'collections' && <CollectionTree searchQuery={searchQuery} />}
-        {activeTab === 'environments' && <EnvironmentList searchQuery={searchQuery} />}
-        {activeTab === 'history' && <HistoryList searchQuery={searchQuery} />}
-        {activeTab === 'mcp' && <McpList searchQuery={searchQuery} />}
+        {sidebarActiveTab === 'collections' && <CollectionTree searchQuery={searchQuery} />}
+        {sidebarActiveTab === 'environments' && <EnvironmentList searchQuery={searchQuery} />}
+        {sidebarActiveTab === 'history' && <HistoryList searchQuery={searchQuery} />}
+        {sidebarActiveTab === 'workflows' && <WorkflowList searchQuery={searchQuery} />}
+        {sidebarActiveTab === 'mcp' && <McpList searchQuery={searchQuery} />}
       </div>
 
       {/* Import Dialog */}

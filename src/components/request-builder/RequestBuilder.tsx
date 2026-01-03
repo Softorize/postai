@@ -168,7 +168,13 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
     setAuth(currentDraft?.auth || request?.auth)
     setPreRequestScript(currentDraft?.preRequestScript || request?.pre_request_script || '')
     setTestScript(currentDraft?.testScript || request?.test_script || '')
-    setResponse(null)
+
+    // Load historical response if present (from history entries)
+    if (currentTab?.historicalResponse) {
+      setResponse(currentTab.historicalResponse)
+    } else {
+      setResponse(null)
+    }
     setError(null)
 
     // Mark initialization complete after a tick

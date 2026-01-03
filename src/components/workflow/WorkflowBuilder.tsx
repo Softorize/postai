@@ -16,7 +16,11 @@ const NODE_PALETTE = [
   { type: 'variable', label: 'Set Variable', icon: Variable, color: 'cyan' },
 ]
 
-export function WorkflowBuilder() {
+interface WorkflowBuilderProps {
+  workflowId?: string
+}
+
+export function WorkflowBuilder({ workflowId }: WorkflowBuilderProps) {
   const {
     workflows,
     activeWorkflow,
@@ -54,6 +58,13 @@ export function WorkflowBuilder() {
     fetchWorkflows()
     fetchEnvironments()
   }, [])
+
+  // Set active workflow when workflowId prop is provided
+  useEffect(() => {
+    if (workflowId && workflowId !== activeWorkflowId) {
+      setActiveWorkflow(workflowId)
+    }
+  }, [workflowId])
 
   useEffect(() => {
     if (activeWorkflowId) {

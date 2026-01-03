@@ -8,10 +8,12 @@ import {
   Trash2,
   FolderPlus,
   FilePlus,
+  GitBranch,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useCollectionsStore } from '@/stores/collections.store'
 import { useTabsStore } from '@/stores/tabs.store'
+import { useWorkflowsStore } from '@/stores/workflows.store'
 import { Collection, Folder as FolderType, Request, HttpMethod } from '@/types'
 import { InputDialog } from '../common/InputDialog'
 
@@ -462,9 +464,18 @@ function RequestItem({
 }) {
   const { openTab, activeTabId, tabs } = useTabsStore()
   const { deleteRequest, highlightedRequestId } = useCollectionsStore()
+  const { workflows, fetchWorkflows, addNodeToWorkflow } = useWorkflowsStore()
   const [showMenu, setShowMenu] = useState(false)
+  const [showWorkflowPicker, setShowWorkflowPicker] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const itemRef = useRef<HTMLDivElement>(null)
+
+  // Fetch workflows when workflow picker is shown
+  useEffect(() => {
+    if (showWorkflowPicker && workflows.length === 0) {
+      fetchWorkflows()
+    }
+  }, [showWorkflowPicker])
 
   // Check if this request is in the active tab
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -551,8 +562,20 @@ function RequestItem({
       {showMenu && (
         <div
           ref={menuRef}
-          className="absolute right-2 top-8 bg-sidebar border border-border rounded-lg shadow-xl z-50 overflow-hidden min-w-[120px]"
+          className="absolute right-2 top-8 bg-sidebar border border-border rounded-lg shadow-xl z-50 overflow-hidden min-w-[160px]"
         >
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowMenu(false)
+              setShowWorkflowPicker(true)
+            }}
+          >
+            <GitBranch className="w-4 h-4 text-purple-400" />
+            Add to Workflow
+          </button>
+          <div className="border-t border-border" />
           <button
             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left text-red-400"
             onClick={(e) => {
@@ -565,6 +588,113 @@ function RequestItem({
           </button>
         </div>
       )}
+
+      {/* Workflow Picker Dialog */}
+      {showWorkflowPicker && (
+        <WorkflowPickerDialog
+          request={request}
+          workflows={workflows}
+          onSelect={async (workflowId) => {
+            await addNodeToWorkflow(workflowId, request)
+            setShowWorkflowPicker(false)
+          }}
+          onClose={() => setShowWorkflowPicker(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Workflow Picker Dialog Component
+function WorkflowPickerDialog({
+  request,
+  workflows,
+  onSelect,
+  onClose,
+}: {
+  request: Request
+  workflows: { id: string; name: string; description?: string }[]
+  onSelect: (workflowId: string) => Promise<void>
+  onClose: () => void
+}) {
+  const [isLoading, setIsLoading] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const handleSelect = async (workflowId: string) => {
+    setIsLoading(true)
+    setSelectedId(workflowId)
+    try {
+      await onSelect(workflowId)
+    } catch (error) {
+      console.error('Failed to add to workflow:', error)
+    } finally {
+      setIsLoading(false)
+      setSelectedId(null)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-sidebar border border-border rounded-lg shadow-xl w-[400px] max-h-[500px] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-border">
+          <h3 className="text-sm font-medium">Add to Workflow</h3>
+          <p className="text-xs text-text-secondary mt-1">
+            Add "{request.name}" as HTTP Request node
+          </p>
+        </div>
+
+        {/* Workflow List */}
+        <div className="flex-1 overflow-auto p-2">
+          {workflows.length === 0 ? (
+            <div className="p-4 text-center text-text-secondary text-sm">
+              <GitBranch className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              No workflows available.
+              <br />
+              Create a workflow first.
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {workflows.map((workflow) => (
+                <button
+                  key={workflow.id}
+                  onClick={() => handleSelect(workflow.id)}
+                  disabled={isLoading}
+                  className={clsx(
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors",
+                    "hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed",
+                    selectedId === workflow.id && "bg-purple-500/20"
+                  )}
+                >
+                  <GitBranch className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{workflow.name}</div>
+                    {workflow.description && (
+                      <div className="text-xs text-text-secondary truncate">{workflow.description}</div>
+                    )}
+                  </div>
+                  {selectedId === workflow.id && isLoading && (
+                    <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-border flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
