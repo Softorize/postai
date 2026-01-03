@@ -47,6 +47,11 @@ jobs:
       - name: Build Electron app (ARM64)
         run: npx electron-builder --mac --arm64 --publish never
 
+      - name: Set DMG file icon
+        run: |
+          brew install fileicon
+          fileicon set release/PostAI-*.dmg resources/icon.icns
+
       - name: Upload ARM64 DMG to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
