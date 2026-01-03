@@ -73,6 +73,9 @@ class ExecuteRequestView(APIView):
                 error_message=result.get('error'),
             )
 
+        # Include the actual request headers in the response (including HMAC)
+        result['request_headers'] = headers
+
         return Response(result)
 
     def _apply_hmac_auth(self, method, url, headers, body, hmac_config):

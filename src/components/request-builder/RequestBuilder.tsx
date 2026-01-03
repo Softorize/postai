@@ -429,6 +429,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
       const result = await api.post('/requests/execute/', requestPayload)
 
       // Update console entry with response details
+      // Use actual request headers from backend (includes HMAC headers if configured)
       updateEntry(entryId, {
         status: result.data.status_code,
         statusText: result.data.status_text,
@@ -436,6 +437,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
         size: result.data.size,
         responseHeaders: result.data.headers,
         responseBody: result.data.body,
+        requestHeaders: result.data.request_headers || finalHeaders,
       })
 
       const responseData = {
