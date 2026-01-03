@@ -3,6 +3,12 @@ import { Request, Workflow, Environment, HttpMethod, KeyValuePair, RequestBody, 
 
 export type TabType = 'request' | 'workflow' | 'mcp' | 'ai' | 'environments' | 'environment'
 
+// MCP tab data
+export interface McpTabData {
+  id?: string  // Optional for compatibility with other tab data types
+  serverId?: string
+}
+
 // Draft data for unsaved request changes
 export interface RequestDraft {
   method: HttpMethod
@@ -19,7 +25,7 @@ export interface Tab {
   id: string
   type: TabType
   title: string
-  data?: Request | Workflow | Environment | null
+  data?: Request | Workflow | Environment | McpTabData | null
   isDirty?: boolean
   draft?: RequestDraft  // Store unsaved changes
   historicalResponse?: Response  // For history entries - the response that was received

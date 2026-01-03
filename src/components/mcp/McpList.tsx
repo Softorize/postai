@@ -22,12 +22,12 @@ export function McpList({ searchQuery = '' }: McpListProps) {
     server.description?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const handleServerClick = () => {
-    // Open MCP tab
+  const handleServerClick = (server: typeof servers[0]) => {
+    // Open MCP tab with specific server selected
     openTab({
       type: 'mcp',
-      title: 'MCP Servers',
-      data: null,
+      title: server.name,
+      data: { serverId: server.id },
     })
   }
 
@@ -62,7 +62,7 @@ export function McpList({ searchQuery = '' }: McpListProps) {
       {filteredServers.map(server => (
         <button
           key={server.id}
-          onClick={handleServerClick}
+          onClick={() => handleServerClick(server)}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left group"
         >
           {/* Status indicator */}

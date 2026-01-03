@@ -12,7 +12,11 @@ import toast from 'react-hot-toast'
 
 type Tab = 'servers' | 'tools' | 'resources' | 'prompts'
 
-export function McpManager() {
+interface McpManagerProps {
+  serverId?: string
+}
+
+export function McpManager({ serverId }: McpManagerProps) {
   const {
     servers,
     activeServerId,
@@ -40,6 +44,20 @@ export function McpManager() {
   useEffect(() => {
     fetchServers()
   }, [])
+
+  // Handle when a specific server is passed via prop (from sidebar click)
+  useEffect(() => {
+    if (serverId && servers.length > 0) {
+      const server = servers.find(s => s.id === serverId)
+      if (server) {
+        setActiveServer(serverId)
+        // If server is connected, show tools tab; otherwise stay on servers
+        if (server.is_connected) {
+          setActiveTab('tools')
+        }
+      }
+    }
+  }, [serverId, servers])
 
   useEffect(() => {
     if (activeServerId && activeServer?.is_connected) {

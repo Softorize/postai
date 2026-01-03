@@ -185,7 +185,7 @@ export function MainContent() {
               />
             )}
             {activeTab.type === 'mcp' && (
-              <McpManager />
+              <McpManager serverId={(activeTab.data as { serverId?: string })?.serverId} />
             )}
             {activeTab.type === 'environments' && (
               <EnvironmentManager />
