@@ -1,13 +1,11 @@
 import { useState } from 'react'
-import { Settings, Wifi, WifiOff, Bot } from 'lucide-react'
-import { useBackendStore } from '@/stores/backend.store'
+import { Settings, Bot } from 'lucide-react'
 import { useAiStore } from '@/stores/ai.store'
 import { WorkspaceSelector } from '../workspaces/WorkspaceSelector'
 import { EnvironmentSelector } from '../environments/EnvironmentSelector'
 import { AiProviderSettings } from '../ai/AiProviderSettings'
 
 export function Header() {
-  const { isConnected } = useBackendStore()
   const { isSidebarOpen, toggleSidebar, providers } = useAiStore()
   const [showAiSettings, setShowAiSettings] = useState(false)
 
@@ -38,21 +36,6 @@ export function Header() {
         {/* Environment selector */}
         <div className="no-drag mr-4">
           <EnvironmentSelector />
-        </div>
-
-        {/* Connection status */}
-        <div className="no-drag flex items-center gap-2 mr-4">
-          {isConnected ? (
-            <div className="flex items-center gap-1 text-green-400 text-xs">
-              <Wifi className="w-3.5 h-3.5" />
-              <span>Connected</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-red-400 text-xs">
-              <WifiOff className="w-3.5 h-3.5" />
-              <span>Disconnected</span>
-            </div>
-          )}
         </div>
 
         {/* AI button */}
