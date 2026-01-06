@@ -161,7 +161,8 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
         // Get currently selected value from multi-value array
         const values = variable.values || []
         const selectedIndex = variable.selected_value_index || 0
-        return values[selectedIndex] || match
+        // Use nullish coalescing to preserve empty string values
+        return values[selectedIndex] ?? match
       }
       return match
     })
@@ -177,7 +178,8 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
     if (variable) {
       const values = variable.values || []
       const selectedIndex = variable.selected_value_index || 0
-      return values[selectedIndex] || null
+      // Use nullish coalescing to preserve empty string values
+      return values[selectedIndex] ?? null
     }
     return null
   },
