@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { Send, Loader2, Save, FolderPlus, Code2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { HttpMethod } from '@/types'
@@ -47,11 +47,26 @@ export function UrlBar({
   onToggleCodeSnippet,
 }: UrlBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
   const { activeEnvironment } = useEnvironmentsStore()
 
   // Popover state
   const [activeVariable, setActiveVariable] = useState<string | null>(null)
   const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null)
+
+  // Sync overlay scroll with input scroll
+  useEffect(() => {
+    const input = inputRef.current
+    const overlay = overlayRef.current
+    if (!input || !overlay) return
+
+    const handleScroll = () => {
+      overlay.scrollLeft = input.scrollLeft
+    }
+
+    input.addEventListener('scroll', handleScroll)
+    return () => input.removeEventListener('scroll', handleScroll)
+  }, [])
 
   // Get list of existing variable keys
   const existingVars = new Set(
@@ -165,12 +180,14 @@ export function UrlBar({
 
       {/* URL input with variable highlighting */}
       <div className="flex-1 relative">
-        {/* Highlighted display layer */}
+        {/* Highlighted display layer - scrolls with input */}
         <div
+          ref={overlayRef}
           className={clsx(
-            'absolute inset-0 px-4 py-2 pointer-events-none overflow-hidden',
-            'text-sm font-mono whitespace-nowrap'
+            'absolute inset-0 px-4 py-2 pointer-events-none overflow-x-auto overflow-y-hidden',
+            'text-sm font-mono whitespace-nowrap scrollbar-none'
           )}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {url ? renderHighlightedUrl() : (
             <span className="text-text-secondary">

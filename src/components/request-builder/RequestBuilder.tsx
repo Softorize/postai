@@ -44,10 +44,30 @@ export const AUTO_GENERATED_HEADER_KEYS = [
   'host',
 ]
 
-// Check if headers have any actual content
+// Check if headers have any actual user-defined content (not just empty rows)
 const hasActualHeaders = (headers?: KeyValuePair[]): boolean => {
   if (!headers || headers.length === 0) return false
-  return headers.some(h => h.key.trim() !== '')
+  return headers.some(h => h.key && h.key.trim() !== '')
+}
+
+// Merge user headers with default headers (add missing defaults at the beginning)
+const mergeWithDefaults = (headers: KeyValuePair[]): KeyValuePair[] => {
+  const existingKeys = new Set(
+    headers.filter(h => h.key).map(h => h.key.toLowerCase())
+  )
+  const merged: KeyValuePair[] = []
+
+  // Add default headers that don't already exist
+  for (const defaultHeader of DEFAULT_HEADERS) {
+    if (defaultHeader.key && !existingKeys.has(defaultHeader.key.toLowerCase())) {
+      merged.push({ ...defaultHeader })
+    }
+  }
+
+  // Add user's headers
+  merged.push(...headers)
+
+  return merged
 }
 
 // Apply auth configuration to headers
@@ -124,7 +144,16 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
   // Initialize state from draft (if exists) or request
   const getInitialMethod = () => draft?.method || request?.method || 'GET'
   const getInitialUrl = () => draft?.url || request?.url || ''
-  const getInitialHeaders = () => draft?.headers || (hasActualHeaders(request?.headers) ? request!.headers : DEFAULT_HEADERS)
+  const getInitialHeaders = () => {
+    // If there's a draft, use it (user has already modified headers)
+    if (draft?.headers) return draft.headers
+    // If request has actual headers, merge with defaults
+    if (hasActualHeaders(request?.headers)) {
+      return mergeWithDefaults(request!.headers)
+    }
+    // Otherwise, use defaults
+    return DEFAULT_HEADERS
+  }
   const getInitialParams = () => draft?.params || request?.params || [{ key: '', value: '', enabled: true }]
   const getInitialBody = () => draft?.body || request?.body || { mode: 'raw', raw: '', language: 'json' }
   const getInitialAuth = () => draft?.auth || request?.auth
@@ -164,7 +193,14 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
 
     setMethod(currentDraft?.method || request?.method || 'GET')
     setUrl(currentDraft?.url || request?.url || '')
-    setHeaders(currentDraft?.headers || (hasActualHeaders(request?.headers) ? request!.headers : DEFAULT_HEADERS))
+    // Use draft headers, or merge request headers with defaults, or use defaults
+    if (currentDraft?.headers) {
+      setHeaders(currentDraft.headers)
+    } else if (hasActualHeaders(request?.headers)) {
+      setHeaders(mergeWithDefaults(request!.headers))
+    } else {
+      setHeaders(DEFAULT_HEADERS)
+    }
     setParams(currentDraft?.params || request?.params || [{ key: '', value: '', enabled: true }])
     setBody(currentDraft?.body || request?.body || { mode: 'raw', raw: '', language: 'json' })
     setAuth(currentDraft?.auth || request?.auth)
