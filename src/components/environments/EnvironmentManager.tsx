@@ -13,6 +13,7 @@ import {
 import { clsx } from 'clsx'
 import { useEnvironmentsStore } from '@/stores/environments.store'
 import { Environment, EnvironmentVariable } from '@/types'
+import { LinkedValueDropdown } from './LinkedValueDropdown'
 import toast from 'react-hot-toast'
 
 interface EnvironmentManagerProps {
@@ -432,7 +433,7 @@ function VariableRow({
     v => v.id !== variable.id && v.values.length > 1
   )
 
-  // Check if this variable is linked to others
+  // Check if this variable is linked to others (same link_group)
   const linkedVariables = variable.link_group
     ? allVariables.filter(v => v.link_group === variable.link_group && v.id !== variable.id)
     : []
@@ -461,17 +462,12 @@ function VariableRow({
         </div>
         <div className="col-span-3 flex items-center gap-2">
           {variable.values.length > 1 ? (
-            <select
-              value={variable.selected_value_index}
-              onChange={(e) => onSelectValue(parseInt(e.target.value))}
-              className="flex-1 px-2 py-1 text-sm bg-panel border border-border rounded"
-            >
-              {variable.values.map((val, idx) => (
-                <option key={idx} value={idx}>
-                  {variable.is_secret ? '••••••••' : val || '(empty)'}
-                </option>
-              ))}
-            </select>
+            <LinkedValueDropdown
+              variable={variable}
+              linkedVariables={linkedVariables}
+              onSelectValue={onSelectValue}
+              onAddValue={onAddValue}
+            />
           ) : (
             <input
               type={variable.is_secret && !showSecret ? 'password' : 'text'}
@@ -483,7 +479,7 @@ function VariableRow({
           {variable.is_secret && (
             <button
               onClick={() => setShowSecret(!showSecret)}
-              className="p-1 hover:bg-white/10 rounded"
+              className="p-1 hover:bg-white/10 rounded flex-shrink-0"
             >
               {showSecret ? (
                 <EyeOff className="w-4 h-4 text-text-secondary" />
@@ -492,13 +488,16 @@ function VariableRow({
               )}
             </button>
           )}
-          <button
-            onClick={onAddValue}
-            className="p-1 hover:bg-white/10 rounded text-text-secondary hover:text-primary-400"
-            title="Add another value"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+          {/* Only show external + button for single-value variables */}
+          {variable.values.length <= 1 && (
+            <button
+              onClick={onAddValue}
+              className="p-1 hover:bg-white/10 rounded text-text-secondary hover:text-primary-400 flex-shrink-0"
+              title="Add another value"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
         </div>
         <div className="col-span-3 flex items-center">
           <input

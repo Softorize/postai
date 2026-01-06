@@ -254,17 +254,17 @@ export function KeyValueEditor({
 
           {/* Value input with variable highlighting */}
           <div className="flex-1 relative">
-            {/* Highlighted display layer */}
-            <div
-              className={clsx(
-                'absolute inset-0 px-3 py-2 pointer-events-none overflow-hidden',
-                'text-sm font-mono whitespace-nowrap'
-              )}
-            >
-              {item.value ? renderHighlightedValue(item.value) : (
-                <span className="text-text-secondary">{valuePlaceholder}</span>
-              )}
-            </div>
+            {/* Highlighted display layer - only render when variables present */}
+            {hasVariables(item.value) && (
+              <div
+                className={clsx(
+                  'absolute inset-0 px-3 py-2 pointer-events-none overflow-hidden',
+                  'text-sm font-mono whitespace-nowrap'
+                )}
+              >
+                {renderHighlightedValue(item.value)}
+              </div>
+            )}
 
             {/* Actual input */}
             <input
@@ -272,12 +272,12 @@ export function KeyValueEditor({
               value={item.value}
               onChange={(e) => handleChange(index, 'value', e.target.value)}
               onKeyDown={(e) => handleKeyDown(e, index)}
-              placeholder=""
+              placeholder={valuePlaceholder}
               className={clsx(
                 'w-full px-3 py-2 bg-sidebar border border-border rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 font-mono transition-colors',
-                'caret-text-primary',
-                hasVariables(item.value) ? 'text-transparent' : 'text-text-primary'
+                hasVariables(item.value) && 'variable-overlay-input'
               )}
+              style={hasVariables(item.value) ? undefined : { color: '#cccccc', WebkitTextFillColor: '#cccccc' }}
             />
           </div>
 

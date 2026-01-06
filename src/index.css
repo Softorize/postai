@@ -194,3 +194,20 @@ button:disabled {
   -webkit-text-fill-color: #ffffff;
   background: rgba(14, 165, 233, 0.5) !important;
 }
+
+/* Variable highlighting overlay pattern - prevents blurry text */
+.variable-overlay-input {
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
+  caret-color: #ffffff !important;
+}
+
+.variable-overlay-input::selection {
+  -webkit-text-fill-color: #ffffff;
+  background: rgba(14, 165, 233, 0.5) !important;
+}
+
+.variable-overlay-input::-moz-selection {
+  -webkit-text-fill-color: #ffffff;
+  background: rgba(14, 165, 233, 0.5) !important;
+}

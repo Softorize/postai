@@ -180,21 +180,19 @@ export function UrlBar({
 
       {/* URL input with variable highlighting */}
       <div className="flex-1 relative">
-        {/* Highlighted display layer - scrolls with input */}
-        <div
-          ref={overlayRef}
-          className={clsx(
-            'absolute inset-0 px-4 py-2 pointer-events-none overflow-x-auto overflow-y-hidden',
-            'text-sm font-mono whitespace-nowrap scrollbar-none'
-          )}
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          {url ? renderHighlightedUrl() : (
-            <span className="text-text-secondary">
-              Enter request URL (e.g., https://api.example.com/users)
-            </span>
-          )}
-        </div>
+        {/* Highlighted display layer - only render when variables present */}
+        {hasVariables && (
+          <div
+            ref={overlayRef}
+            className={clsx(
+              'absolute inset-0 px-4 py-2 pointer-events-none overflow-x-auto overflow-y-hidden',
+              'text-sm font-mono whitespace-nowrap scrollbar-none'
+            )}
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {renderHighlightedUrl()}
+          </div>
+        )}
 
         {/* Actual input - transparent text when variables present */}
         <input
@@ -203,13 +201,13 @@ export function UrlBar({
           value={url}
           onChange={(e) => onUrlChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder=""
+          placeholder="Enter request URL (e.g., https://api.example.com/users)"
           className={clsx(
             'w-full px-4 py-2 bg-sidebar border border-border rounded-lg text-sm',
             'focus:border-primary-500 focus:ring-1 focus:ring-primary-500 font-mono',
-            'caret-text-primary',
-            hasVariables ? 'text-transparent' : 'text-text-primary'
+            hasVariables && 'variable-overlay-input'
           )}
+          style={hasVariables ? undefined : { color: '#cccccc', WebkitTextFillColor: '#cccccc' }}
         />
       </div>
 

@@ -112,49 +112,34 @@ export function VariableInput({
 
   return (
     <div className={clsx('relative', className)}>
-      {/* Highlighted display layer */}
-      <div
-        className={clsx(
-          'absolute inset-0 px-3 py-2 pointer-events-none whitespace-pre overflow-hidden',
-          'text-sm font-mono'
-        )}
-        style={{ color: 'transparent' }}
-      >
-        {renderHighlightedText(false)}
-      </div>
-
       {/* Actual input */}
       <input
         ref={inputRef}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder=""
+        placeholder={placeholder}
         className={clsx(
           'w-full px-3 py-2 text-sm font-mono bg-transparent',
           'border border-border rounded',
           'focus:border-primary-500 focus:outline-none',
-          'caret-text-primary',
           // Make text transparent when there are variables, so highlight shows through
-          value && /\{\{[^}]+\}\}/.test(value) ? 'text-transparent' : 'text-text-primary'
+          value && /\{\{[^}]+\}\}/.test(value) && 'variable-overlay-input'
         )}
-        style={{
-          // Ensure the input text is visible when no variables
-          ...(value && !/\{\{[^}]+\}\}/.test(value) ? {} : {}),
-        }}
+        style={value && /\{\{[^}]+\}\}/.test(value) ? undefined : { color: '#cccccc', WebkitTextFillColor: '#cccccc' }}
       />
 
-      {/* Visible text layer - shows on top of transparent input, interactive for variables */}
-      <div
-        className={clsx(
-          'absolute inset-0 px-3 py-2 pointer-events-none whitespace-pre overflow-hidden',
-          'text-sm font-mono text-text-primary'
-        )}
-      >
-        {value ? renderHighlightedText(true) : (
-          <span className="text-text-secondary">{placeholder}</span>
-        )}
-      </div>
+      {/* Visible text layer - only render when variables present */}
+      {value && /\{\{[^}]+\}\}/.test(value) && (
+        <div
+          className={clsx(
+            'absolute inset-0 px-3 py-2 pointer-events-none whitespace-pre overflow-hidden',
+            'text-sm font-mono text-text-primary'
+          )}
+        >
+          {renderHighlightedText(true)}
+        </div>
+      )}
 
       {/* Variable Popover */}
       {activeVariable && (
@@ -247,8 +232,8 @@ export function VariableTextarea({
           'w-full px-3 py-2 text-sm font-mono bg-transparent',
           'border border-border rounded',
           'focus:border-primary-500 focus:outline-none',
-          'caret-text-primary resize-none',
-          value && /\{\{[^}]+\}\}/.test(value) ? 'text-transparent' : 'text-text-primary'
+          'resize-none',
+          value && /\{\{[^}]+\}\}/.test(value) ? 'variable-overlay-input' : 'text-text-primary'
         )}
       />
 
