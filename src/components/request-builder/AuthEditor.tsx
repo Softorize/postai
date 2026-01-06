@@ -4,6 +4,7 @@ import { Eye, EyeOff, Loader2, RefreshCw, Check, AlertCircle } from 'lucide-reac
 import { useState } from 'react'
 import { api } from '@/api/client'
 import toast from 'react-hot-toast'
+import { VariableInput } from '../common/VariableInput'
 
 interface AuthEditorProps {
   auth?: AuthConfig
@@ -103,38 +104,36 @@ export function AuthEditor({ auth, onChange }: AuthEditorProps) {
         <div className="space-y-4">
           <div>
             <label className="block text-sm text-text-secondary mb-2">Username</label>
-            <input
-              type="text"
+            <VariableInput
               value={auth?.basic?.username || ''}
-              onChange={(e) =>
+              onChange={(value) =>
                 onChange({
                   type: 'basic',
-                  basic: { ...auth?.basic, username: e.target.value, password: auth?.basic?.password || '' },
+                  basic: { ...auth?.basic, username: value, password: auth?.basic?.password || '' },
                 })
               }
-              placeholder="Enter username"
-              className="w-full px-4 py-2 bg-sidebar border border-border rounded-lg text-sm focus:border-primary-500"
+              placeholder="Enter username or {{variable}}"
+              className="bg-sidebar"
             />
           </div>
           <div>
             <label className="block text-sm text-text-secondary mb-2">Password</label>
             <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
+              <VariableInput
                 value={auth?.basic?.password || ''}
-                onChange={(e) =>
+                onChange={(value) =>
                   onChange({
                     type: 'basic',
-                    basic: { username: auth?.basic?.username || '', password: e.target.value },
+                    basic: { username: auth?.basic?.username || '', password: value },
                   })
                 }
-                placeholder="Enter password"
-                className="w-full px-4 py-2 pr-10 bg-sidebar border border-border rounded-lg text-sm focus:border-primary-500"
+                placeholder="Enter password or {{variable}}"
+                className="bg-sidebar pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded z-10"
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4 text-text-secondary" />

@@ -672,6 +672,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
           {/* Request panel */}
           <Panel defaultSize={50} minSize={20}>
             <RequestTabs
+              tabId={tabId}
               headers={headers}
               params={params}
               body={body}

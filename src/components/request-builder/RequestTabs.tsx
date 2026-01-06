@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { clsx } from 'clsx'
 import { KeyValuePair, RequestBody, AuthConfig } from '@/types'
 import { KeyValueEditor } from './KeyValueEditor'
@@ -6,8 +5,9 @@ import { HeadersEditor } from './HeadersEditor'
 import { BodyEditor } from './BodyEditor'
 import { AuthEditor } from './AuthEditor'
 import { ScriptEditor } from './ScriptEditor'
+import { useTabsStore, RequestSubTab } from '@/stores/tabs.store'
 
-type TabId = 'params' | 'headers' | 'body' | 'auth' | 'pre-request' | 'tests'
+type TabId = RequestSubTab
 
 interface Tab {
   id: TabId
@@ -16,6 +16,7 @@ interface Tab {
 }
 
 interface RequestTabsProps {
+  tabId: string
   headers: KeyValuePair[]
   params: KeyValuePair[]
   body: RequestBody
@@ -32,6 +33,7 @@ interface RequestTabsProps {
 }
 
 export function RequestTabs({
+  tabId,
   headers,
   params,
   body,
@@ -46,7 +48,13 @@ export function RequestTabs({
   onPreRequestScriptChange,
   onTestScriptChange,
 }: RequestTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('params')
+  const { getTab, updateTab } = useTabsStore()
+  const tab = getTab(tabId)
+  const activeTab = tab?.activeSubTab || 'params'
+
+  const setActiveTab = (newTab: TabId) => {
+    updateTab(tabId, { activeSubTab: newTab })
+  }
 
   const enabledParams = params.filter((p) => p.enabled && p.key).length
   const enabledHeaders = headers.filter((h) => h.enabled && h.key).length

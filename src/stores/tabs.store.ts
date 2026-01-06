@@ -21,6 +21,8 @@ export interface RequestDraft {
   testScript?: string
 }
 
+export type RequestSubTab = 'params' | 'headers' | 'body' | 'auth' | 'pre-request' | 'tests'
+
 export interface Tab {
   id: string
   type: TabType
@@ -29,6 +31,7 @@ export interface Tab {
   isDirty?: boolean
   draft?: RequestDraft  // Store unsaved changes
   historicalResponse?: Response  // For history entries - the response that was received
+  activeSubTab?: RequestSubTab  // Preserve the active sub-tab (Params, Headers, Body, Auth, etc.)
 }
 
 interface WorkspaceTabs {

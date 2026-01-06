@@ -1,6 +1,7 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import { useEnvironmentsStore } from '@/stores/environments.store'
+import { VariablePopover } from './VariablePopover'
 
 interface VariableInputProps {
   value: string
@@ -15,6 +16,7 @@ interface VariableInputProps {
  * Variables are shown in {{variable}} syntax.
  * - Green: variable exists in active environment
  * - Orange: variable doesn't exist
+ * Click on a variable to see/edit its value.
  */
 export function VariableInput({
   value,
@@ -26,6 +28,10 @@ export function VariableInput({
   const inputRef = useRef<HTMLInputElement>(null)
   const { activeEnvironment } = useEnvironmentsStore()
 
+  // Popover state
+  const [activeVariable, setActiveVariable] = useState<string | null>(null)
+  const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null)
+
   // Get list of existing variable keys
   const existingVars = new Set(
     (activeEnvironment?.variables || [])
@@ -33,8 +39,21 @@ export function VariableInput({
       .map((v) => v.key)
   )
 
+  const handleVariableClick = (varName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const target = e.currentTarget as HTMLElement
+    const rect = target.getBoundingClientRect()
+    setActiveVariable(varName)
+    setPopoverAnchor(rect)
+  }
+
+  const handleClosePopover = () => {
+    setActiveVariable(null)
+    setPopoverAnchor(null)
+  }
+
   // Parse and highlight variables
-  const renderHighlightedText = () => {
+  const renderHighlightedText = (interactive: boolean = false) => {
     if (!value) {
       return <span className="text-text-secondary">{placeholder}</span>
     }
@@ -57,16 +76,24 @@ export function VariableInput({
       // Add the variable with highlighting
       const varName = match[1].trim()
       const exists = existingVars.has(varName)
+      const variable = activeEnvironment?.variables?.find(v => v.key === varName)
+      const currentValue = variable?.values?.[variable?.selected_value_index || 0] || ''
+
       parts.push(
         <span
           key={`var-${match.index}`}
+          onClick={interactive ? (e) => handleVariableClick(varName, e) : undefined}
           className={clsx(
-            'rounded px-0.5',
+            'rounded px-0.5 mx-px transition-all',
+            interactive && 'cursor-pointer pointer-events-auto hover:ring-2 hover:ring-primary-500/50',
             exists
-              ? 'bg-green-500/20 text-green-400'
-              : 'bg-orange-500/20 text-orange-400'
+              ? 'bg-green-500/30 text-green-400 hover:bg-green-500/40'
+              : 'bg-orange-500/30 text-orange-400 hover:bg-orange-500/40'
           )}
-          title={exists ? `Variable: ${varName}` : `Unknown variable: ${varName}`}
+          title={exists
+            ? `${varName} = ${variable?.is_secret ? '••••••••' : currentValue || '(empty)'}\nClick to edit`
+            : `Unknown variable: ${varName}\nClick to view`
+          }
         >
           {match[0]}
         </span>
@@ -93,7 +120,7 @@ export function VariableInput({
         )}
         style={{ color: 'transparent' }}
       >
-        {renderHighlightedText()}
+        {renderHighlightedText(false)}
       </div>
 
       {/* Actual input */}
@@ -117,17 +144,26 @@ export function VariableInput({
         }}
       />
 
-      {/* Visible text layer - shows on top of transparent input */}
+      {/* Visible text layer - shows on top of transparent input, interactive for variables */}
       <div
         className={clsx(
           'absolute inset-0 px-3 py-2 pointer-events-none whitespace-pre overflow-hidden',
           'text-sm font-mono text-text-primary'
         )}
       >
-        {value ? renderHighlightedText() : (
+        {value ? renderHighlightedText(true) : (
           <span className="text-text-secondary">{placeholder}</span>
         )}
       </div>
+
+      {/* Variable Popover */}
+      {activeVariable && (
+        <VariablePopover
+          variableName={activeVariable}
+          anchorRect={popoverAnchor}
+          onClose={handleClosePopover}
+        />
+      )}
     </div>
   )
 }
