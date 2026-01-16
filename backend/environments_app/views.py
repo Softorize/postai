@@ -48,10 +48,39 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
-        """Export environment in Postman-compatible format."""
-        environment = self.get_object()
+        """Export environment in Postman or PostAI format.
 
-        # Build Postman environment format
+        Query params:
+            format: 'postman' (default) or 'postai'
+        """
+        environment = self.get_object()
+        export_format = request.query_params.get('format', 'postman')
+
+        if export_format == 'postai':
+            # PostAI format - preserves multi-value variables
+            postai_env = {
+                'id': str(environment.id),
+                'name': environment.name,
+                'description': environment.description or '',
+                'values': [],
+                '_postai_format': True,
+                '_postai_version': '1.0',
+                '_exported_at': environment.updated_at.isoformat() if environment.updated_at else None,
+            }
+
+            for variable in environment.variables.all():
+                postai_var = {
+                    'key': variable.key,
+                    'values': variable.values or [],
+                    'selected_value_index': variable.selected_value_index or 0,
+                    'enabled': variable.enabled,
+                    'is_secret': variable.is_secret,
+                }
+                postai_env['values'].append(postai_var)
+
+            return Response(postai_env)
+
+        # Postman format (default) - single value per variable
         postman_env = {
             'id': str(environment.id),
             'name': environment.name,
@@ -60,7 +89,6 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
             '_postman_exported_at': environment.updated_at.isoformat() if environment.updated_at else None,
         }
 
-        # Convert variables to Postman format
         for variable in environment.variables.all():
             # Get currently selected value (multi-value -> single value)
             values = variable.values or []

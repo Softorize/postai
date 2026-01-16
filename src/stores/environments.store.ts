@@ -29,7 +29,7 @@ interface EnvironmentsState {
   activateEnvironment: (id: string) => Promise<void>
   getActiveEnvironment: () => Promise<Environment | null>
   importEnvironment: (content: string) => Promise<ImportResult>
-  exportEnvironment: (id: string) => Promise<ExportResult>
+  exportEnvironment: (id: string, format?: 'postman' | 'postai') => Promise<ExportResult>
 
   // Variable actions (with multi-value support)
   createVariable: (envId: string, data: Partial<EnvironmentVariable>) => Promise<EnvironmentVariable>
@@ -123,12 +123,15 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
     }
   },
 
-  exportEnvironment: async (id) => {
+  exportEnvironment: async (id, format = 'postman') => {
     try {
-      const response = await api.get(`/environments/${id}/export/`)
+      const response = await api.get(`/environments/${id}/export/`, {
+        params: { format }
+      })
       const data = response.data
       const environment = get().environments.find(e => e.id === id)
-      const filename = `${environment?.name || 'environment'}.postman_environment.json`
+      const extension = format === 'postai' ? '.postai_environment.json' : '.postman_environment.json'
+      const filename = `${environment?.name || 'environment'}${extension}`
 
       // Create download
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })

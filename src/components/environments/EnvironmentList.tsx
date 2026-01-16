@@ -16,6 +16,7 @@ import { useTabsStore } from '@/stores/tabs.store'
 import { Environment } from '@/types'
 import { ImportEnvironmentDialog } from './ImportEnvironmentDialog'
 import { InputDialog } from '../common/InputDialog'
+import { ExportFormatDialog, ExportFormat } from './ExportFormatDialog'
 
 interface EnvironmentListProps {
   searchQuery: string
@@ -37,6 +38,7 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
   const [_editingId, _setEditingId] = useState<string | null>(null)
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [showNewDialog, setShowNewDialog] = useState(false)
+  const [exportingEnvironment, setExportingEnvironment] = useState<Environment | null>(null)
 
   const filteredEnvironments = searchQuery
     ? environments.filter((e) =>
@@ -73,11 +75,17 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
     }
   }
 
-  const handleExport = async (env: Environment) => {
-    const result = await exportEnvironment(env.id)
+  const handleExport = (env: Environment) => {
+    setExportingEnvironment(env)
+  }
+
+  const handleConfirmExport = async (format: ExportFormat) => {
+    if (!exportingEnvironment) return
+    const result = await exportEnvironment(exportingEnvironment.id, format)
     if (!result.success) {
       alert(`Failed to export: ${result.error}`)
     }
+    setExportingEnvironment(null)
   }
 
   if (isLoading) {
@@ -141,6 +149,14 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
         confirmText="Create"
         onConfirm={handleConfirmCreate}
         onCancel={() => setShowNewDialog(false)}
+      />
+
+      {/* Export Format Dialog */}
+      <ExportFormatDialog
+        isOpen={!!exportingEnvironment}
+        environmentName={exportingEnvironment?.name || ''}
+        onConfirm={handleConfirmExport}
+        onCancel={() => setExportingEnvironment(null)}
       />
     </div>
   )
