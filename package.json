@@ -1,6 +1,6 @@
 {
   "name": "postai",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "PostAI - Advanced API Testing Tool with AI Integration",
   "main": "dist-electron/main.js",
   "author": "PostAI Team",

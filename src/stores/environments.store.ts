@@ -126,7 +126,7 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
   exportEnvironment: async (id, format = 'postman') => {
     try {
       const response = await api.get(`/environments/${id}/export/`, {
-        params: { format }
+        params: { export_format: format }
       })
       const data = response.data
       const environment = get().environments.find(e => e.id === id)
@@ -146,7 +146,13 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
 
       return { success: true }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to export environment'
+      let errorMessage = 'Failed to export environment'
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { status?: number }, message?: string }
+        errorMessage = `Request failed with status code ${axiosError.response?.status}`
+      } else if (error instanceof Error) {
+        errorMessage = error.message
+      }
       return { success: false, error: errorMessage }
     }
   },

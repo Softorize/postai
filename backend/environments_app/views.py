@@ -51,10 +51,10 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
         """Export environment in Postman or PostAI format.
 
         Query params:
-            format: 'postman' (default) or 'postai'
+            export_format: 'postman' (default) or 'postai'
         """
         environment = self.get_object()
-        export_format = request.query_params.get('format', 'postman')
+        export_format = request.query_params.get('export_format', 'postman')
 
         if export_format == 'postai':
             # PostAI format - preserves multi-value variables
