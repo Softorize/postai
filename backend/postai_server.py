@@ -33,9 +33,27 @@ def setup_django():
     django.setup()
 
 
+def check_migrations_needed():
+    """Check if there are pending migrations."""
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+    try:
+        executor = MigrationExecutor(connection)
+        plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+        return len(plan) > 0
+    except Exception:
+        # If we can't check, assume migrations are needed (e.g., fresh DB)
+        return True
+
+
 def run_migrations():
-    """Run database migrations."""
+    """Run database migrations only if needed."""
     from django.core.management import call_command
+
+    if not check_migrations_needed():
+        print("Database is up to date, skipping migrations.")
+        return
+
     print("Running database migrations...")
     try:
         call_command('migrate', '--run-syncdb', verbosity=1)

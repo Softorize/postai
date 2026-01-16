@@ -152,8 +152,13 @@ app.whenReady().then(async () => {
   })
 
   setupIpcHandlers()
-  await startDjango()
+
+  // Create window immediately to show loading state
+  // while Django starts in the background
   await createWindow()
+
+  // Start Django in background - frontend will poll for readiness
+  startDjango()
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
