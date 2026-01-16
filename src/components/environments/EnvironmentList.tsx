@@ -8,6 +8,7 @@ import {
   Trash2,
   Copy,
   Upload,
+  Download,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useEnvironmentsStore } from '@/stores/environments.store'
@@ -28,6 +29,7 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
     createEnvironment,
     activateEnvironment,
     deleteEnvironment,
+    exportEnvironment,
   } = useEnvironmentsStore()
 
   const { openTab } = useTabsStore()
@@ -68,6 +70,13 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
   const handleDelete = async (env: Environment) => {
     if (confirm(`Delete environment "${env.name}"?`)) {
       await deleteEnvironment(env.id)
+    }
+  }
+
+  const handleExport = async (env: Environment) => {
+    const result = await exportEnvironment(env.id)
+    if (!result.success) {
+      alert(`Failed to export: ${result.error}`)
     }
   }
 
@@ -113,6 +122,7 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
             onClick={() => handleOpenEnvironment(env)}
             onEdit={() => handleOpenEnvironment(env)}
             onDelete={() => handleDelete(env)}
+            onExport={() => handleExport(env)}
           />
         ))
       )}
@@ -143,6 +153,7 @@ function EnvironmentItem({
   onClick,
   onEdit,
   onDelete,
+  onExport,
 }: {
   environment: Environment
   isActive: boolean
@@ -150,6 +161,7 @@ function EnvironmentItem({
   onClick: () => void
   onEdit: () => void
   onDelete: () => void
+  onExport: () => void
 }) {
   const [showMenu, setShowMenu] = useState(false)
 
@@ -205,6 +217,17 @@ function EnvironmentItem({
           >
             <Copy className="w-4 h-4" />
             Duplicate
+          </button>
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              onExport()
+              setShowMenu(false)
+            }}
+          >
+            <Download className="w-4 h-4" />
+            Export
           </button>
           <button
             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-red-400"

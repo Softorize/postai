@@ -10,6 +10,11 @@ interface ImportResult {
   error?: string
 }
 
+interface ExportResult {
+  success: boolean
+  error?: string
+}
+
 interface EnvironmentsState {
   environments: Environment[]
   activeEnvironment: Environment | null
@@ -24,6 +29,7 @@ interface EnvironmentsState {
   activateEnvironment: (id: string) => Promise<void>
   getActiveEnvironment: () => Promise<Environment | null>
   importEnvironment: (content: string) => Promise<ImportResult>
+  exportEnvironment: (id: string) => Promise<ExportResult>
 
   // Variable actions (with multi-value support)
   createVariable: (envId: string, data: Partial<EnvironmentVariable>) => Promise<EnvironmentVariable>
@@ -113,6 +119,31 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
       return { success: false, error: response.data.error || 'Import failed' }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to import environment'
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  exportEnvironment: async (id) => {
+    try {
+      const response = await api.get(`/environments/${id}/export/`)
+      const data = response.data
+      const environment = get().environments.find(e => e.id === id)
+      const filename = `${environment?.name || 'environment'}.postman_environment.json`
+
+      // Create download
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      return { success: true }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export environment'
       return { success: false, error: errorMessage }
     }
   },

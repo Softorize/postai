@@ -46,6 +46,37 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
         environment.save()
         return Response(EnvironmentSerializer(environment).data)
 
+    @action(detail=True, methods=['get'])
+    def export(self, request, pk=None):
+        """Export environment in Postman-compatible format."""
+        environment = self.get_object()
+
+        # Build Postman environment format
+        postman_env = {
+            'id': str(environment.id),
+            'name': environment.name,
+            'values': [],
+            '_postman_variable_scope': 'environment',
+            '_postman_exported_at': environment.updated_at.isoformat() if environment.updated_at else None,
+        }
+
+        # Convert variables to Postman format
+        for variable in environment.variables.all():
+            # Get currently selected value (multi-value -> single value)
+            values = variable.values or []
+            selected_index = variable.selected_value_index or 0
+            current_value = values[selected_index] if selected_index < len(values) else ''
+
+            postman_var = {
+                'key': variable.key,
+                'value': current_value,
+                'enabled': variable.enabled,
+                'type': 'secret' if variable.is_secret else 'default',
+            }
+            postman_env['values'].append(postman_var)
+
+        return Response(postman_env)
+
     @action(detail=False, methods=['post'], url_path='import')
     def import_environment(self, request):
         """Import a Postman environment from JSON."""

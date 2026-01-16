@@ -10,6 +10,7 @@ import {
   FilePlus,
   GitBranch,
   Pencil,
+  Download,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useCollectionsStore } from '@/stores/collections.store'
@@ -91,7 +92,7 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
   const [showFolderDialog, setShowFolderDialog] = useState(false)
   const [showRequestDialog, setShowRequestDialog] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { deleteCollection, createFolder, createRequest, expandedIds, toggleExpanded, setExpanded } = useCollectionsStore()
+  const { deleteCollection, createFolder, createRequest, expandedIds, toggleExpanded, setExpanded, exportCollection } = useCollectionsStore()
   const { openTab } = useTabsStore()
 
   const isExpanded = expandedIds.has(collection.id)
@@ -121,6 +122,14 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
   const handleDelete = async () => {
     if (confirm(`Delete collection "${collection.name}" and all its contents?`)) {
       await deleteCollection(collection.id)
+    }
+    setShowMenu(false)
+  }
+
+  const handleExport = async () => {
+    const result = await exportCollection(collection.id)
+    if (!result.success) {
+      alert(`Failed to export: ${result.error}`)
     }
     setShowMenu(false)
   }
@@ -218,6 +227,16 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
           >
             <FilePlus className="w-4 h-4" />
             Add Request
+          </button>
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleExport()
+            }}
+          >
+            <Download className="w-4 h-4" />
+            Export
           </button>
           <div className="border-t border-border" />
           <button

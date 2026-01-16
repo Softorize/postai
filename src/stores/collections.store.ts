@@ -5,6 +5,11 @@ import { useWorkspacesStore } from './workspaces.store'
 
 export type SidebarTab = 'collections' | 'environments' | 'history' | 'mcp' | 'workflows'
 
+interface ExportResult {
+  success: boolean
+  error?: string
+}
+
 interface CollectionsState {
   collections: Collection[]
   selectedCollection: Collection | null
@@ -29,6 +34,7 @@ interface CollectionsState {
   deleteCollection: (id: string) => Promise<void>
   selectCollection: (collection: Collection | null) => void
   selectRequest: (request: Request | null) => void
+  exportCollection: (id: string) => Promise<ExportResult>
 
   // Folder actions
   createFolder: (collectionId: string, name: string, parentId?: string) => Promise<Folder>
@@ -166,6 +172,31 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
       collections: state.collections.filter((c) => c.id !== id),
       selectedCollection: state.selectedCollection?.id === id ? null : state.selectedCollection,
     }))
+  },
+
+  exportCollection: async (id) => {
+    try {
+      const response = await api.get(`/collections/${id}/export/`)
+      const data = response.data
+      const collection = get().collections.find(c => c.id === id)
+      const filename = `${collection?.name || 'collection'}.postman_collection.json`
+
+      // Create download
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      return { success: true }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export collection'
+      return { success: false, error: errorMessage }
+    }
   },
 
   selectCollection: (collection) => {
