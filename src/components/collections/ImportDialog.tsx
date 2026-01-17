@@ -146,7 +146,7 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={clsx(
-              'border-2 border-dashed rounded-lg p-8 text-center transition-colors',
+              'relative border-2 border-dashed rounded-lg p-8 text-center transition-colors',
               isDragging
                 ? 'border-primary-500 bg-primary-500/10'
                 : 'border-border hover:border-primary-500/50'
