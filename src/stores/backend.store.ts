@@ -14,7 +14,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   checkConnection: async () => {
     try {
       const response = await axios.get(`${get().baseUrl}/api/v1/health/`, {
-        timeout: 5000,
+        timeout: 2000,
       })
       const connected = response.status === 200
       set({ isConnected: connected })

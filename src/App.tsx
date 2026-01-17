@@ -18,7 +18,8 @@ function App() {
           useBackendStore.setState({ baseUrl: url })
         }
 
-        // Wait for backend to be ready
+        // Wait for backend to be ready with exponential backoff
+        // Starts at 200ms, grows to max 2000ms: 200 -> 300 -> 450 -> 675 -> ...
         let attempts = 0
         const maxAttempts = 30
 
@@ -28,7 +29,8 @@ function App() {
             setIsLoading(false)
             return
           }
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          const delay = Math.min(200 * Math.pow(1.5, attempts), 2000)
+          await new Promise(resolve => setTimeout(resolve, delay))
           attempts++
         }
 

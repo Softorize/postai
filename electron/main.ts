@@ -139,6 +139,17 @@ function setupIpcHandlers() {
   })
 }
 
+function ensureDjangoRunning() {
+  if (!djangoManager) {
+    startDjango()
+    return
+  }
+  const status = djangoManager.getStatus()
+  if (!status.running) {
+    startDjango()
+  }
+}
+
 // App lifecycle
 app.whenReady().then(async () => {
   // Configure CSP to allow script execution for pre-request/test scripts
@@ -161,9 +172,16 @@ app.whenReady().then(async () => {
   startDjango()
 
   app.on('activate', async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    // Show existing window if it exists
+    if (mainWindow) {
+      mainWindow.show()
+      mainWindow.focus()
+    } else if (BrowserWindow.getAllWindows().length === 0) {
       await createWindow()
     }
+
+    // Always ensure Django is running when app is activated
+    ensureDjangoRunning()
   })
 })
 
