@@ -185,10 +185,19 @@ export function UrlBar({
           <div
             ref={overlayRef}
             className={clsx(
-              'absolute inset-0 px-4 py-2 pointer-events-none overflow-x-auto overflow-y-hidden',
+              'absolute pointer-events-none overflow-x-auto overflow-y-hidden',
               'text-sm font-mono whitespace-nowrap scrollbar-none'
             )}
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            style={{
+              // Match input padding + border (1px border)
+              top: '1px',
+              left: '1px',
+              right: '1px',
+              bottom: '1px',
+              padding: '0.5rem 1rem', // py-2 px-4
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
+            }}
           >
             {renderHighlightedUrl()}
           </div>
