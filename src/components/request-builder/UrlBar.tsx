@@ -95,21 +95,31 @@ export function UrlBar({
     setPopoverAnchor(null)
   }
 
+  // Decode URL-encoded curly braces for display
+  const decodeVariableBraces = (text: string): string => {
+    return text
+      .replace(/%7B%7B/gi, '{{')
+      .replace(/%7D%7D/gi, '}}')
+  }
+
+  // Get display URL with decoded curly braces
+  const displayUrl = decodeVariableBraces(url)
+
   // Render URL with highlighted variables
   const renderHighlightedUrl = () => {
-    if (!url) return null
+    if (!displayUrl) return null
 
     const parts: React.ReactNode[] = []
     const regex = /\{\{([^}]+)\}\}/g
     let lastIndex = 0
     let match
 
-    while ((match = regex.exec(url)) !== null) {
+    while ((match = regex.exec(displayUrl)) !== null) {
       // Add text before the match
       if (match.index > lastIndex) {
         parts.push(
           <span key={`text-${lastIndex}`}>
-            {url.slice(lastIndex, match.index)}
+            {displayUrl.slice(lastIndex, match.index)}
           </span>
         )
       }
@@ -144,14 +154,14 @@ export function UrlBar({
     }
 
     // Add remaining text
-    if (lastIndex < url.length) {
-      parts.push(<span key={`text-${lastIndex}`}>{url.slice(lastIndex)}</span>)
+    if (lastIndex < displayUrl.length) {
+      parts.push(<span key={`text-${lastIndex}`}>{displayUrl.slice(lastIndex)}</span>)
     }
 
     return parts
   }
 
-  const hasVariables = /\{\{[^}]+\}\}/.test(url)
+  const hasVariables = /\{\{[^}]+\}\}/.test(displayUrl)
 
   return (
     <div className="flex items-center gap-2">
@@ -207,8 +217,8 @@ export function UrlBar({
         <input
           ref={inputRef}
           type="text"
-          value={url}
-          onChange={(e) => onUrlChange(e.target.value)}
+          value={displayUrl}
+          onChange={(e) => onUrlChange(decodeVariableBraces(e.target.value))}
           onKeyDown={handleKeyDown}
           placeholder="Enter request URL (e.g., https://api.example.com/users)"
           className={clsx(
