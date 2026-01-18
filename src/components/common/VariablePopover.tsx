@@ -3,27 +3,58 @@ import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 import { Check, X, ChevronDown } from 'lucide-react'
 import { useEnvironmentsStore } from '@/stores/environments.store'
+import { useCollectionsStore } from '@/stores/collections.store'
 
 interface VariablePopoverProps {
   variableName: string
   anchorRect: DOMRect | null
   onClose: () => void
+  collectionId?: string  // Optional collection ID for priority lookup
 }
 
-export function VariablePopover({ variableName, anchorRect, onClose }: VariablePopoverProps) {
-  const { activeEnvironment, updateVariable, selectVariableValue } = useEnvironmentsStore()
+export function VariablePopover({ variableName, anchorRect, onClose, collectionId }: VariablePopoverProps) {
+  const { activeEnvironment, environments, updateVariable, selectVariableValue } = useEnvironmentsStore()
+  const { collections } = useCollectionsStore()
   const popoverRef = useRef<HTMLDivElement>(null)
   const [editValue, setEditValue] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [showValues, setShowValues] = useState(false)
 
-  // Find the variable in active environment
-  const variable = activeEnvironment?.variables?.find(
-    (v) => v.key === variableName && v.enabled
-  )
+  // Get collection's active environment if collectionId is provided
+  const collectionEnvironment = (() => {
+    if (!collectionId) return null
+    const collection = collections.find(c => c.id === collectionId)
+    if (!collection?.active_environment_id) return null
+    return environments.find(e => e.id === collection.active_environment_id) || null
+  })()
 
-  const currentValue = variable
-    ? variable.values[variable.selected_value_index] || ''
+  // Determine which environment to use (collection env takes priority)
+  const effectiveEnvironment = collectionEnvironment || activeEnvironment
+
+  // Find the variable - first in collection env, then in global
+  const variable = (() => {
+    // First check collection environment
+    if (collectionEnvironment) {
+      const collVar = collectionEnvironment.variables?.find(
+        (v) => v.key === variableName && v.enabled
+      )
+      if (collVar) return { var: collVar, env: collectionEnvironment }
+    }
+    // Fall back to global environment
+    if (activeEnvironment) {
+      const globalVar = activeEnvironment.variables?.find(
+        (v) => v.key === variableName && v.enabled
+      )
+      if (globalVar) return { var: globalVar, env: activeEnvironment }
+    }
+    return null
+  })()
+
+  const variableData = variable?.var
+  const sourceEnvironment = variable?.env
+
+  const currentValue = variableData
+    ? variableData.values[variableData.selected_value_index] || ''
     : ''
 
   useEffect(() => {
@@ -61,13 +92,13 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
   const left = Math.max(8, anchorRect.left)
 
   const handleSaveValue = async () => {
-    if (!variable || !activeEnvironment) return
+    if (!variableData || !sourceEnvironment) return
 
     try {
       // Update the current value
-      const newValues = [...variable.values]
-      newValues[variable.selected_value_index] = editValue
-      await updateVariable(activeEnvironment.id, variable.id, { values: newValues })
+      const newValues = [...variableData.values]
+      newValues[variableData.selected_value_index] = editValue
+      await updateVariable(sourceEnvironment.id, variableData.id, { values: newValues })
       setIsEditing(false)
     } catch (err) {
       console.error('Failed to update variable:', err)
@@ -75,10 +106,10 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
   }
 
   const handleSelectValue = async (index: number) => {
-    if (!variable || !activeEnvironment) return
+    if (!variableData || !sourceEnvironment) return
 
     try {
-      await selectVariableValue(activeEnvironment.id, variable.id, index)
+      await selectVariableValue(sourceEnvironment.id, variableData.id, index)
       setShowValues(false)
     } catch (err) {
       console.error('Failed to select value:', err)
@@ -115,7 +146,7 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
 
       {/* Content */}
       <div className="p-3">
-        {variable ? (
+        {variableData ? (
           <>
             {/* Variable name */}
             <div className="mb-3">
@@ -129,9 +160,9 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
             <div className="mb-3">
               <label className="text-xs text-text-secondary block mb-1">
                 Current Value
-                {variable.values.length > 1 && (
+                {variableData.values.length > 1 && (
                   <span className="ml-2 text-primary-400">
-                    ({variable.selected_value_index + 1} of {variable.values.length})
+                    ({variableData.selected_value_index + 1} of {variableData.values.length})
                   </span>
                 )}
               </label>
@@ -139,7 +170,7 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
               {isEditing ? (
                 <div className="flex gap-2">
                   <input
-                    type={variable.is_secret ? 'password' : 'text'}
+                    type={variableData.is_secret ? 'password' : 'text'}
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -170,13 +201,13 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
                   className="px-2 py-1 text-sm font-mono bg-panel border border-border rounded cursor-pointer hover:border-primary-500 transition-colors"
                   title="Click to edit"
                 >
-                  {variable.is_secret ? '••••••••' : currentValue || <span className="text-text-secondary italic">empty</span>}
+                  {variableData.is_secret ? '••••••••' : currentValue || <span className="text-text-secondary italic">empty</span>}
                 </div>
               )}
             </div>
 
             {/* Multi-value selector */}
-            {variable.values.length > 1 && (
+            {variableData.values.length > 1 && (
               <div className="mb-3">
                 <label className="text-xs text-text-secondary block mb-1">All Values</label>
                 <div className="relative">
@@ -185,24 +216,24 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
                     className="w-full flex items-center justify-between px-2 py-1 text-sm bg-panel border border-border rounded hover:border-primary-500"
                   >
                     <span className="font-mono truncate">
-                      {variable.is_secret ? '••••••••' : currentValue || '(empty)'}
+                      {variableData.is_secret ? '••••••••' : currentValue || '(empty)'}
                     </span>
                     <ChevronDown className={clsx('w-4 h-4 transition-transform', showValues && 'rotate-180')} />
                   </button>
 
                   {showValues && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-sidebar border border-border rounded shadow-lg z-10 max-h-40 overflow-auto">
-                      {variable.values.map((val, idx) => (
+                      {variableData.values.map((val, idx) => (
                         <button
                           key={idx}
                           onClick={() => handleSelectValue(idx)}
                           className={clsx(
                             'w-full text-left px-2 py-1.5 text-sm font-mono hover:bg-white/5',
-                            idx === variable.selected_value_index && 'bg-primary-500/20 text-primary-400'
+                            idx === variableData.selected_value_index && 'bg-primary-500/20 text-primary-400'
                           )}
                         >
-                          {variable.is_secret ? '••••••••' : val || '(empty)'}
-                          {idx === variable.selected_value_index && (
+                          {variableData.is_secret ? '••••••••' : val || '(empty)'}
+                          {idx === variableData.selected_value_index && (
                             <Check className="w-3 h-3 inline ml-2" />
                           )}
                         </button>
@@ -214,16 +245,16 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
             )}
 
             {/* Description */}
-            {variable.description && (
+            {variableData.description && (
               <div className="text-xs text-text-secondary mt-2 pt-2 border-t border-border">
-                {variable.description}
+                {variableData.description}
               </div>
             )}
 
             {/* Environment info */}
             <div className="text-xs text-text-secondary mt-2 pt-2 border-t border-border flex items-center gap-1">
               <span>Environment:</span>
-              <span className="text-primary-400">{activeEnvironment?.name}</span>
+              <span className="text-primary-400">{sourceEnvironment?.name}</span>
             </div>
           </>
         ) : (
@@ -235,9 +266,9 @@ export function VariablePopover({ variableName, anchorRect, onClose }: VariableP
             <p className="text-sm text-text-secondary mb-2">
               Variable not found in active environment
             </p>
-            {activeEnvironment ? (
+            {effectiveEnvironment ? (
               <p className="text-xs text-text-secondary">
-                Add this variable to "{activeEnvironment.name}" to use it
+                Add this variable to "{effectiveEnvironment.name}" to use it
               </p>
             ) : (
               <p className="text-xs text-text-secondary">

@@ -21,11 +21,24 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
     serializer_class = EnvironmentSerializer
 
     def get_queryset(self):
-        """Filter environments by workspace if specified."""
+        """Filter environments by workspace, collection, or global_only.
+
+        Query params:
+            workspace: Filter by workspace ID
+            collection: Filter by collection ID
+            global_only: If 'true', only return global environments (collection=None)
+        """
         queryset = Environment.objects.all()
         workspace_id = self.request.query_params.get('workspace')
+        collection_id = self.request.query_params.get('collection')
+        global_only = self.request.query_params.get('global_only', '').lower() == 'true'
+
         if workspace_id:
             queryset = queryset.filter(workspace_id=workspace_id)
+        if collection_id:
+            queryset = queryset.filter(collection_id=collection_id)
+        if global_only:
+            queryset = queryset.filter(collection__isnull=True)
         return queryset
 
     def get_serializer_class(self):
@@ -91,6 +104,7 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
                 'name': environment.name,
                 'description': environment.description or '',
                 'values': [],
+                'collection_id': str(environment.collection_id) if environment.collection_id else None,
                 '_postai_format': True,
                 '_postai_version': '1.0',
                 '_exported_at': environment.updated_at.isoformat() if environment.updated_at else None,

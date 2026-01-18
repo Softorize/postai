@@ -1,6 +1,7 @@
 """Collection serializers for PostAI."""
 from rest_framework import serializers
 from .models import Collection, Folder, Request
+from environments_app.serializers import EnvironmentSerializer
 
 
 class RequestSerializer(serializers.ModelSerializer):
@@ -54,14 +55,19 @@ class CollectionSerializer(serializers.ModelSerializer):
     """Serializer for Collection model."""
     folders = serializers.SerializerMethodField()
     requests = serializers.SerializerMethodField()
+    environments = serializers.SerializerMethodField()
+    active_environment_id = serializers.PrimaryKeyRelatedField(
+        source='active_environment',
+        read_only=True
+    )
 
     class Meta:
         model = Collection
         fields = [
             'id', 'name', 'description', 'postman_id', 'schema_version',
             'variables', 'auth', 'pre_request_script', 'test_script',
-            'folders', 'requests', 'sync_id', 'last_synced_at',
-            'created_at', 'updated_at'
+            'folders', 'requests', 'environments', 'active_environment_id',
+            'sync_id', 'last_synced_at', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -74,6 +80,10 @@ class CollectionSerializer(serializers.ModelSerializer):
         """Get root-level requests only."""
         root_requests = obj.requests.filter(folder__isnull=True)
         return RequestSerializer(root_requests, many=True).data
+
+    def get_environments(self, obj):
+        """Get collection-specific environments."""
+        return EnvironmentSerializer(obj.environments.all(), many=True).data
 
 
 class CollectionCreateSerializer(serializers.ModelSerializer):

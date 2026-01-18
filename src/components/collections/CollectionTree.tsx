@@ -12,6 +12,8 @@ import {
   Pencil,
   Download,
   Copy,
+  Globe,
+  X,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useCollectionsStore } from '@/stores/collections.store'
@@ -19,6 +21,7 @@ import { useTabsStore } from '@/stores/tabs.store'
 import { useWorkflowsStore } from '@/stores/workflows.store'
 import { Collection, Folder as FolderType, Request, HttpMethod } from '@/types'
 import { InputDialog } from '../common/InputDialog'
+import { CollectionExportDialog } from './CollectionExportDialog'
 
 interface CollectionTreeProps {
   searchQuery: string
@@ -90,13 +93,18 @@ export function CollectionTree({ searchQuery }: CollectionTreeProps) {
 
 function CollectionItem({ collection, searchQuery }: { collection: Collection; searchQuery: string }) {
   const [showMenu, setShowMenu] = useState(false)
+  const [showEnvMenu, setShowEnvMenu] = useState(false)
   const [showFolderDialog, setShowFolderDialog] = useState(false)
   const [showRequestDialog, setShowRequestDialog] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { deleteCollection, createFolder, createRequest, expandedIds, toggleExpanded, setExpanded, exportCollection } = useCollectionsStore()
+  const envMenuRef = useRef<HTMLDivElement>(null)
+  const { deleteCollection, createFolder, createRequest, expandedIds, toggleExpanded, setExpanded, setCollectionEnvironment } = useCollectionsStore()
   const { openTab } = useTabsStore()
 
   const isExpanded = expandedIds.has(collection.id)
+  const hasEnvironments = collection.environments && collection.environments.length > 0
+  const activeEnv = collection.environments?.find(e => e.id === collection.active_environment_id)
 
   // Auto-expand when searching and this collection has matches
   const shouldAutoExpand = searchQuery && collectionMatchesSearch(collection, searchQuery)
@@ -113,12 +121,15 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false)
       }
+      if (envMenuRef.current && !envMenuRef.current.contains(e.target as Node)) {
+        setShowEnvMenu(false)
+      }
     }
-    if (showMenu) {
+    if (showMenu || showEnvMenu) {
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showMenu])
+  }, [showMenu, showEnvMenu])
 
   const handleDelete = async () => {
     if (confirm(`Delete collection "${collection.name}" and all its contents?`)) {
@@ -127,12 +138,9 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
     setShowMenu(false)
   }
 
-  const handleExport = async () => {
-    const result = await exportCollection(collection.id)
-    if (!result.success) {
-      alert(`Failed to export: ${result.error}`)
-    }
+  const handleExport = () => {
     setShowMenu(false)
+    setShowExportDialog(true)
   }
 
   const handleAddFolder = () => {
@@ -173,6 +181,15 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
     }
   }
 
+  const handleSelectEnvironment = async (envId: string | null) => {
+    try {
+      await setCollectionEnvironment(collection.id, envId)
+    } catch (error) {
+      console.error('Failed to set collection environment:', error)
+    }
+    setShowEnvMenu(false)
+  }
+
   return (
     <div className="relative">
       <div
@@ -192,6 +209,67 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
           <Folder className="w-4 h-4 text-yellow-500" />
         )}
         <span className="flex-1 text-sm truncate">{collection.name}</span>
+
+        {/* Environment indicator/button - only show if collection has environments */}
+        {hasEnvironments && (
+          <div className="relative" ref={envMenuRef}>
+            <button
+              className={clsx(
+                "p-1 rounded flex items-center gap-1",
+                activeEnv
+                  ? "text-primary-400 opacity-100"
+                  : "text-text-secondary opacity-0 group-hover:opacity-100",
+                "hover:bg-white/10"
+              )}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowEnvMenu(!showEnvMenu)
+              }}
+              title={activeEnv ? `Environment: ${activeEnv.name}` : 'Select environment'}
+            >
+              <Globe className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Environment dropdown */}
+            {showEnvMenu && (
+              <div className="absolute right-0 top-7 bg-sidebar border border-border rounded-lg shadow-xl z-50 overflow-hidden min-w-[160px]">
+                <div className="px-3 py-1.5 text-xs text-text-secondary border-b border-border">
+                  Collection Environment
+                </div>
+                <button
+                  className={clsx(
+                    "w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left",
+                    !activeEnv && "text-primary-400"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleSelectEnvironment(null)
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                  No environment
+                </button>
+                {collection.environments?.map((env) => (
+                  <button
+                    key={env.id}
+                    className={clsx(
+                      "w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left",
+                      env.id === collection.active_environment_id && "text-primary-400"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleSelectEnvironment(env.id)
+                    }}
+                  >
+                    <Globe className="w-4 h-4" />
+                    {env.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-white/10 rounded"
           onClick={(e) => {
@@ -300,6 +378,13 @@ function CollectionItem({ collection, searchQuery }: { collection: Collection; s
         confirmText="Create"
         onConfirm={handleConfirmAddRequest}
         onCancel={() => setShowRequestDialog(false)}
+      />
+
+      {/* Export Dialog */}
+      <CollectionExportDialog
+        isOpen={showExportDialog}
+        collection={collection}
+        onClose={() => setShowExportDialog(false)}
       />
     </div>
   )

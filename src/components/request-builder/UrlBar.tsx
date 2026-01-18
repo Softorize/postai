@@ -24,6 +24,7 @@ interface UrlBarProps {
   isDirty?: boolean
   canSave?: boolean
   showCodeSnippet?: boolean
+  collectionId?: string  // For collection environment priority in variable popover
   onMethodChange: (method: HttpMethod) => void
   onUrlChange: (url: string) => void
   onSend: () => void
@@ -39,6 +40,7 @@ export function UrlBar({
   isDirty = false,
   canSave = false,
   showCodeSnippet = false,
+  collectionId,
   onMethodChange,
   onUrlChange,
   onSend,
@@ -306,6 +308,7 @@ export function UrlBar({
           variableName={activeVariable}
           anchorRect={popoverAnchor}
           onClose={handleClosePopover}
+          collectionId={collectionId}
         />
       )}
     </div>

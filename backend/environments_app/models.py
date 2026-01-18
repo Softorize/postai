@@ -4,12 +4,24 @@ from core.models import BaseModel, Workspace
 
 
 class Environment(BaseModel):
-    """Environment configuration."""
+    """Environment configuration.
+
+    Environments can be global (collection=None) or collection-scoped (collection=<id>).
+    Collection-scoped environments override global environment variables when their
+    collection's request is executed.
+    """
     workspace = models.ForeignKey(
         Workspace,
         on_delete=models.CASCADE,
         related_name='environments',
         null=True,  # Nullable initially for migration
+        blank=True
+    )
+    collection = models.ForeignKey(
+        'collections_app.Collection',
+        on_delete=models.CASCADE,
+        related_name='environments',
+        null=True,  # null = global environment
         blank=True
     )
     name = models.CharField(max_length=255)
@@ -24,10 +36,19 @@ class Environment(BaseModel):
     def __str__(self):
         return self.name
 
+    @property
+    def is_global(self):
+        """Check if this is a global environment (not scoped to a collection)."""
+        return self.collection is None
+
     def save(self, *args, **kwargs):
-        # Ensure only one active environment
-        if self.is_active:
-            Environment.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+        # Ensure only one active global environment
+        # Collection environments are activated via collection.active_environment
+        if self.is_active and self.is_global:
+            Environment.objects.filter(
+                is_active=True,
+                collection__isnull=True
+            ).exclude(pk=self.pk).update(is_active=False)
         super().save(*args, **kwargs)
 
 

@@ -10,6 +10,9 @@ export function EnvironmentSelector() {
   const { environments, activeEnvironment, activateEnvironment } = useEnvironmentsStore()
   const { openTab } = useTabsStore()
 
+  // Only show global environments (those without a collection)
+  const globalEnvironments = environments.filter(e => !e.collection)
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -64,8 +67,8 @@ export function EnvironmentSelector() {
               <span className="text-sm text-text-secondary">No Environment</span>
             </button>
 
-            {/* Environment list */}
-            {environments.map((env) => (
+            {/* Environment list - only global environments */}
+            {globalEnvironments.map((env) => (
               <div
                 key={env.id}
                 className="flex items-center gap-2 px-3 py-2 hover:bg-white/5 group"

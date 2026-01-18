@@ -130,12 +130,26 @@ const applyApiKeyToParams = (
 
 export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
   const { updateTab, getTab } = useTabsStore()
-  const { resolveVariables } = useEnvironmentsStore()
-  const { updateRequest } = useCollectionsStore()
+  const { resolveVariables, environments } = useEnvironmentsStore()
+  const { updateRequest, collections } = useCollectionsStore()
   const { addEntry, updateEntry } = useConsoleStore()
   const { activeWorkspace } = useWorkspacesStore()
   const currentEntryId = useRef<string | null>(null)
   const isInitializing = useRef(true)
+
+  // Get the collection's active environment for variable resolution priority
+  const getCollectionActiveEnvironment = () => {
+    if (!request?.collection) return null
+    const collection = collections.find(c => c.id === request.collection)
+    if (!collection?.active_environment_id) return null
+    return environments.find(e => e.id === collection.active_environment_id) || null
+  }
+
+  // Wrapper that resolves variables with collection environment priority
+  const resolveWithCollectionEnv = (text: string) => {
+    const collectionEnv = getCollectionActiveEnvironment()
+    return resolveVariables(text, collectionEnv)
+  }
 
   // Get existing draft data from tab
   const tab = getTab(tabId)
@@ -339,7 +353,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
       headers: Record<string, string>
       body?: string
     } = {
-      url: resolveVariables(url),
+      url: resolveWithCollectionEnv(url),
       method,
       headers: {},
       body: undefined,
@@ -348,19 +362,19 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
     // Build initial headers
     headers.forEach((h) => {
       if (h.enabled && h.key) {
-        scriptRequest.headers[resolveVariables(h.key)] = resolveVariables(h.value)
+        scriptRequest.headers[resolveWithCollectionEnv(h.key)] = resolveWithCollectionEnv(h.value)
       }
     })
 
     // Prepare body
     if (['POST', 'PUT', 'PATCH'].includes(method) && body) {
       if (body.mode === 'raw') {
-        scriptRequest.body = resolveVariables(body.raw || '')
+        scriptRequest.body = resolveWithCollectionEnv(body.raw || '')
       } else if (body.mode === 'urlencoded') {
         const formData = new URLSearchParams()
         body.urlencoded?.forEach((item) => {
           if (item.enabled) {
-            formData.append(resolveVariables(item.key), resolveVariables(item.value))
+            formData.append(resolveWithCollectionEnv(item.key), resolveWithCollectionEnv(item.value))
           }
         })
         scriptRequest.body = formData.toString()
@@ -444,7 +458,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
     const tabParams = new Map<string, string>()
     params.forEach((p) => {
       if (p.enabled && p.key) {
-        tabParams.set(resolveVariables(p.key), resolveVariables(p.value))
+        tabParams.set(resolveWithCollectionEnv(p.key), resolveWithCollectionEnv(p.value))
       }
     })
 
@@ -466,10 +480,10 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
       : baseUrl
 
     // Apply API key auth to URL if needed
-    finalUrl = applyApiKeyToParams(finalUrl, auth, resolveVariables)
+    finalUrl = applyApiKeyToParams(finalUrl, auth, resolveWithCollectionEnv)
 
     // Apply auth to headers
-    const finalHeaders = applyAuthToHeaders(scriptRequest.headers, auth, resolveVariables)
+    const finalHeaders = applyAuthToHeaders(scriptRequest.headers, auth, resolveWithCollectionEnv)
 
     // Log to console with full request details
     const entryId = addEntry({
@@ -719,6 +733,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
             isDirty={isDirty}
             canSave={canSave}
             showCodeSnippet={showCodeSnippet}
+            collectionId={request?.collection}
             onMethodChange={setMethod}
             onUrlChange={handleUrlChange}
             onSend={handleSend}

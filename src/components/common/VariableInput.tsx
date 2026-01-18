@@ -9,6 +9,7 @@ interface VariableInputProps {
   placeholder?: string
   className?: string
   type?: 'text' | 'url'
+  collectionId?: string  // For collection environment priority in variable popover
 }
 
 /**
@@ -24,6 +25,7 @@ export function VariableInput({
   placeholder,
   className,
   type = 'text',
+  collectionId,
 }: VariableInputProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const { activeEnvironment } = useEnvironmentsStore()
@@ -147,6 +149,7 @@ export function VariableInput({
           variableName={activeVariable}
           anchorRect={popoverAnchor}
           onClose={handleClosePopover}
+          collectionId={collectionId}
         />
       )}
     </div>

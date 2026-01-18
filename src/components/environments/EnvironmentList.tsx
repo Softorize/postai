@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Globe,
   MoreHorizontal,
@@ -9,14 +9,17 @@ import {
   Copy,
   Upload,
   Download,
+  Folder,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useEnvironmentsStore } from '@/stores/environments.store'
 import { useTabsStore } from '@/stores/tabs.store'
 import { Environment } from '@/types'
 import { ImportEnvironmentDialog } from './ImportEnvironmentDialog'
-import { InputDialog } from '../common/InputDialog'
 import { ExportFormatDialog, ExportFormat } from './ExportFormatDialog'
+import { CreateEnvironmentDialog } from './CreateEnvironmentDialog'
 
 interface EnvironmentListProps {
   searchQuery: string
@@ -27,7 +30,6 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
     environments,
     activeEnvironment,
     isLoading,
-    createEnvironment,
     activateEnvironment,
     deleteEnvironment,
     duplicateEnvironment,
@@ -36,24 +38,54 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
 
   const { openTab } = useTabsStore()
 
-  const [_editingId, _setEditingId] = useState<string | null>(null)
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [showNewDialog, setShowNewDialog] = useState(false)
   const [exportingEnvironment, setExportingEnvironment] = useState<Environment | null>(null)
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
 
-  const filteredEnvironments = searchQuery
-    ? environments.filter((e) =>
-        e.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : environments
+  // Organize environments into sections
+  const { globalEnvironments, collectionEnvironments } = useMemo(() => {
+    const filtered = searchQuery
+      ? environments.filter((e) =>
+          e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (e.collection_name && e.collection_name.toLowerCase().includes(searchQuery.toLowerCase()))
+        )
+      : environments
+
+    const global = filtered.filter(e => !e.collection)
+    const byCollection = filtered.filter(e => e.collection).reduce((acc, env) => {
+      const key = env.collection!
+      if (!acc[key]) {
+        acc[key] = {
+          collectionId: env.collection!,
+          collectionName: env.collection_name || 'Unknown Collection',
+          environments: []
+        }
+      }
+      acc[key].environments.push(env)
+      return acc
+    }, {} as Record<string, { collectionId: string; collectionName: string; environments: Environment[] }>)
+
+    return {
+      globalEnvironments: global,
+      collectionEnvironments: Object.values(byCollection)
+    }
+  }, [environments, searchQuery])
+
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) {
+        next.delete(sectionId)
+      } else {
+        next.add(sectionId)
+      }
+      return next
+    })
+  }
 
   const handleCreate = () => {
     setShowNewDialog(true)
-  }
-
-  const handleConfirmCreate = async (name: string) => {
-    await createEnvironment(name)
-    setShowNewDialog(false)
   }
 
   const handleActivate = async (envId: string) => {
@@ -61,8 +93,10 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
   }
 
   const handleOpenEnvironment = (env: Environment) => {
-    // Activate and open in tab for editing
-    activateEnvironment(env.id)
+    // Only activate global environments
+    if (!env.collection) {
+      activateEnvironment(env.id)
+    }
     openTab({
       type: 'environment',
       title: env.name,
@@ -97,6 +131,8 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
     )
   }
 
+  const hasAnyEnvironments = globalEnvironments.length > 0 || collectionEnvironments.length > 0
+
   return (
     <div className="py-1">
       {/* Action buttons */}
@@ -117,24 +153,86 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
         </button>
       </div>
 
-      {filteredEnvironments.length === 0 ? (
+      {!hasAnyEnvironments ? (
         <div className="p-4 text-text-secondary text-sm text-center">
           {searchQuery ? 'No environments found' : 'No environments yet'}
         </div>
       ) : (
-        filteredEnvironments.map((env) => (
-          <EnvironmentItem
-            key={env.id}
-            environment={env}
-            isActive={activeEnvironment?.id === env.id}
-            onActivate={() => handleActivate(env.id)}
-            onClick={() => handleOpenEnvironment(env)}
-            onEdit={() => handleOpenEnvironment(env)}
-            onDelete={() => handleDelete(env)}
-            onDuplicate={() => duplicateEnvironment(env.id)}
-            onExport={() => handleExport(env)}
-          />
-        ))
+        <>
+          {/* Global Environments Section */}
+          {globalEnvironments.length > 0 && (
+            <div className="mb-2">
+              <button
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-text-secondary hover:bg-white/5"
+                onClick={() => toggleSection('global')}
+              >
+                {collapsedSections.has('global') ? (
+                  <ChevronRight className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+                <Globe className="w-3.5 h-3.5" />
+                <span className="font-medium">Global Environments</span>
+                <span className="ml-auto text-text-secondary/70">{globalEnvironments.length}</span>
+              </button>
+              {!collapsedSections.has('global') && (
+                <div className="ml-2">
+                  {globalEnvironments.map((env) => (
+                    <EnvironmentItem
+                      key={env.id}
+                      environment={env}
+                      isActive={activeEnvironment?.id === env.id}
+                      showActiveIndicator={true}
+                      onActivate={() => handleActivate(env.id)}
+                      onClick={() => handleOpenEnvironment(env)}
+                      onEdit={() => handleOpenEnvironment(env)}
+                      onDelete={() => handleDelete(env)}
+                      onDuplicate={() => duplicateEnvironment(env.id)}
+                      onExport={() => handleExport(env)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Collection Environments Sections */}
+          {collectionEnvironments.map((section) => (
+            <div key={section.collectionId} className="mb-2">
+              <button
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-text-secondary hover:bg-white/5"
+                onClick={() => toggleSection(section.collectionId)}
+              >
+                {collapsedSections.has(section.collectionId) ? (
+                  <ChevronRight className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+                <Folder className="w-3.5 h-3.5 text-yellow-500" />
+                <span className="font-medium truncate">{section.collectionName}</span>
+                <span className="ml-auto text-text-secondary/70">{section.environments.length}</span>
+              </button>
+              {!collapsedSections.has(section.collectionId) && (
+                <div className="ml-2">
+                  {section.environments.map((env) => (
+                    <EnvironmentItem
+                      key={env.id}
+                      environment={env}
+                      isActive={false} // Collection envs don't show global active state
+                      showActiveIndicator={false}
+                      onActivate={() => {}} // No global activation for collection envs
+                      onClick={() => handleOpenEnvironment(env)}
+                      onEdit={() => handleOpenEnvironment(env)}
+                      onDelete={() => handleDelete(env)}
+                      onDuplicate={() => duplicateEnvironment(env.id)}
+                      onExport={() => handleExport(env)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </>
       )}
 
       {/* Import Dialog */}
@@ -144,13 +242,9 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
       />
 
       {/* New Environment Dialog */}
-      <InputDialog
+      <CreateEnvironmentDialog
         isOpen={showNewDialog}
-        title="New Environment"
-        placeholder="Environment name..."
-        confirmText="Create"
-        onConfirm={handleConfirmCreate}
-        onCancel={() => setShowNewDialog(false)}
+        onClose={() => setShowNewDialog(false)}
       />
 
       {/* Export Format Dialog */}
@@ -167,6 +261,7 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
 function EnvironmentItem({
   environment,
   isActive,
+  showActiveIndicator,
   onActivate: _onActivate,
   onClick,
   onEdit,
@@ -176,6 +271,7 @@ function EnvironmentItem({
 }: {
   environment: Environment
   isActive: boolean
+  showActiveIndicator: boolean
   onActivate: () => void
   onClick: () => void
   onEdit: () => void
@@ -200,7 +296,7 @@ function EnvironmentItem({
         )}
       />
       <span className="flex-1 text-sm truncate">{environment.name}</span>
-      {isActive && <Check className="w-4 h-4 text-primary-400" />}
+      {showActiveIndicator && isActive && <Check className="w-4 h-4 text-primary-400" />}
       <span className="text-xs text-text-secondary">
         {environment.variables?.length || 0} vars
       </span>

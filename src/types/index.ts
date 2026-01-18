@@ -30,6 +30,8 @@ export interface Collection extends BaseModel {
   test_script: string
   folders: Folder[]
   requests: Request[]
+  environments?: Environment[]  // Collection-specific environments
+  active_environment_id?: string  // Currently selected collection environment
   sync_id?: string
   last_synced_at?: string
 }
@@ -152,6 +154,8 @@ export interface Environment extends BaseModel {
   description: string
   is_active: boolean
   variables: EnvironmentVariable[]
+  collection?: string  // null for global, collection ID for collection-scoped
+  collection_name?: string  // For display purposes
   sync_id?: string
   last_synced_at?: string
 }

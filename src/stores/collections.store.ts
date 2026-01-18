@@ -10,6 +10,8 @@ interface ExportResult {
   error?: string
 }
 
+export type ExportFormat = 'postman' | 'postai'
+
 interface CollectionsState {
   collections: Collection[]
   selectedCollection: Collection | null
@@ -34,7 +36,8 @@ interface CollectionsState {
   deleteCollection: (id: string) => Promise<void>
   selectCollection: (collection: Collection | null) => void
   selectRequest: (request: Request | null) => void
-  exportCollection: (id: string) => Promise<ExportResult>
+  exportCollection: (id: string, format?: ExportFormat, includeEnvironments?: boolean) => Promise<ExportResult>
+  setCollectionEnvironment: (collectionId: string, environmentId: string | null) => Promise<void>
 
   // Folder actions
   createFolder: (collectionId: string, name: string, parentId?: string) => Promise<Folder>
@@ -174,12 +177,17 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
     }))
   },
 
-  exportCollection: async (id) => {
+  exportCollection: async (id, format = 'postman', includeEnvironments = true) => {
     try {
-      const response = await api.get(`/collections/${id}/export/`)
+      const params: Record<string, string> = { export_format: format }
+      if (format === 'postai') {
+        params.include_environments = includeEnvironments.toString()
+      }
+      const response = await api.get(`/collections/${id}/export/`, { params })
       const data = response.data
       const collection = get().collections.find(c => c.id === id)
-      const filename = `${collection?.name || 'collection'}.postman_collection.json`
+      const extension = format === 'postai' ? '.postai_collection.json' : '.postman_collection.json'
+      const filename = `${collection?.name || 'collection'}${extension}`
 
       // Create download
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -196,6 +204,24 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to export collection'
       return { success: false, error: errorMessage }
+    }
+  },
+
+  setCollectionEnvironment: async (collectionId, environmentId) => {
+    try {
+      const response = await api.post(`/collections/${collectionId}/set-environment/`, {
+        environment_id: environmentId
+      })
+      // Update the collection in state with the new active_environment_id
+      set((state) => ({
+        collections: state.collections.map((c) =>
+          c.id === collectionId ? response.data : c
+        ),
+        selectedCollection: state.selectedCollection?.id === collectionId ? response.data : state.selectedCollection,
+      }))
+    } catch (error: unknown) {
+      console.error('Failed to set collection environment:', error)
+      throw error
     }
   },
 

@@ -28,14 +28,20 @@ class EnvironmentVariableSerializer(serializers.ModelSerializer):
 class EnvironmentSerializer(serializers.ModelSerializer):
     """Serializer for Environment model."""
     variables = EnvironmentVariableSerializer(many=True, read_only=True)
+    collection_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Environment
         fields = [
             'id', 'name', 'description', 'is_active', 'variables',
+            'collection', 'collection_name',
             'sync_id', 'last_synced_at', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'collection_name']
+
+    def get_collection_name(self, obj):
+        """Get the name of the associated collection, if any."""
+        return obj.collection.name if obj.collection else None
 
 
 class EnvironmentCreateSerializer(serializers.ModelSerializer):
@@ -43,7 +49,10 @@ class EnvironmentCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Environment
-        fields = ['name', 'description']
+        fields = ['name', 'description', 'collection']
+        extra_kwargs = {
+            'collection': {'required': False, 'allow_null': True}
+        }
 
 
 class SelectValueSerializer(serializers.Serializer):

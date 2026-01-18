@@ -13,6 +13,8 @@ from .serializers import (
     RequestSerializer,
 )
 from .services.postman_importer import import_postman_file, import_postman_environment
+from environments_app.models import Environment
+from environments_app.serializers import EnvironmentSerializer
 
 
 class CollectionViewSet(viewsets.ModelViewSet):
@@ -85,12 +87,92 @@ class CollectionViewSet(viewsets.ModelViewSet):
                 'errors': result.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=['post'], url_path='set-environment')
+    def set_environment(self, request, pk=None):
+        """Set the active environment for this collection.
+
+        POST body:
+            environment_id: ID of environment to activate (must be collection-scoped to this collection)
+                            Pass null or omit to clear the active environment.
+        """
+        collection = self.get_object()
+        environment_id = request.data.get('environment_id')
+
+        if environment_id is None or environment_id == '':
+            # Clear active environment
+            collection.active_environment = None
+            collection.save()
+            return Response(CollectionSerializer(collection).data)
+
+        # Validate that the environment belongs to this collection
+        try:
+            environment = Environment.objects.get(pk=environment_id, collection=collection)
+        except Environment.DoesNotExist:
+            return Response(
+                {'error': 'Environment not found or does not belong to this collection'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        collection.active_environment = environment
+        collection.save()
+        return Response(CollectionSerializer(collection).data)
+
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
-        """Export collection as Postman format."""
-        collection = self.get_object()
+        """Export collection in Postman or PostAI format.
 
-        # Build Postman collection format
+        Query params:
+            export_format: 'postman' (default) or 'postai'
+            include_environments: 'true' to include collection environments (PostAI only)
+        """
+        collection = self.get_object()
+        export_format = request.query_params.get('export_format', 'postman')
+        include_environments = request.query_params.get('include_environments', 'true').lower() == 'true'
+
+        if export_format == 'postai':
+            # PostAI format - full fidelity export
+            postai_collection = {
+                '_postai_format': True,
+                '_postai_version': '1.0',
+                'info': {
+                    'id': str(collection.id),
+                    'name': collection.name,
+                    'description': collection.description,
+                    'schema': 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
+                },
+                'item': self._export_items(collection),
+                'variable': collection.variables or [],
+                'active_environment_id': str(collection.active_environment_id) if collection.active_environment_id else None,
+            }
+
+            if collection.auth:
+                postai_collection['auth'] = self._export_auth(collection.auth)
+
+            # Include collection-scoped environments if requested
+            if include_environments:
+                environments_data = []
+                for env in collection.environments.all():
+                    env_data = {
+                        'id': str(env.id),
+                        'name': env.name,
+                        'description': env.description or '',
+                        'values': []
+                    }
+                    for variable in env.variables.all():
+                        env_data['values'].append({
+                            'key': variable.key,
+                            'values': variable.values or [],
+                            'selected_value_index': variable.selected_value_index or 0,
+                            'enabled': variable.enabled,
+                            'is_secret': variable.is_secret,
+                        })
+                    environments_data.append(env_data)
+                postai_collection['environments'] = environments_data
+
+            return Response(postai_collection)
+
+        # Postman format (default) - standard Postman collection format
+        # Note: Postman format does not support collection-scoped environments
         postman_collection = {
             'info': {
                 '_postman_id': str(collection.id),

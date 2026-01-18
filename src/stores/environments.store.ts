@@ -23,7 +23,8 @@ interface EnvironmentsState {
 
   // Actions
   fetchEnvironments: () => Promise<void>
-  createEnvironment: (name: string, description?: string) => Promise<Environment>
+  fetchGlobalEnvironments: () => Promise<Environment[]>
+  createEnvironment: (name: string, description?: string, collectionId?: string) => Promise<Environment>
   updateEnvironment: (id: string, data: Partial<Environment>) => Promise<void>
   deleteEnvironment: (id: string) => Promise<void>
   duplicateEnvironment: (id: string) => Promise<Environment>
@@ -40,9 +41,13 @@ interface EnvironmentsState {
   addVariableValue: (envId: string, varId: string, value: string) => Promise<void>
   removeVariableValue: (envId: string, varId: string, index: number) => Promise<void>
 
-  // Utilities
-  resolveVariables: (text: string) => string
-  getVariableValue: (key: string) => string | null
+  // Computed
+  getGlobalEnvironments: () => Environment[]
+  getCollectionEnvironments: (collectionId: string) => Environment[]
+
+  // Utilities - collectionEnv is now optional for priority resolution
+  resolveVariables: (text: string, collectionEnv?: Environment | null) => string
+  getVariableValue: (key: string, collectionEnv?: Environment | null) => string | null
 }
 
 export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
@@ -58,7 +63,8 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
       const params = activeWorkspace ? { workspace: activeWorkspace.id } : {}
       const response = await api.get('/environments/', { params })
       const environments = response.data
-      const active = environments.find((e: Environment) => e.is_active) || null
+      // Only consider global environments for the active environment (collection=null)
+      const active = environments.find((e: Environment) => e.is_active && !e.collection) || null
       set({ environments, activeEnvironment: active, isLoading: false })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch environments'
@@ -66,8 +72,27 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
     }
   },
 
-  createEnvironment: async (name, description) => {
-    const response = await api.post('/environments/', { name, description })
+  fetchGlobalEnvironments: async () => {
+    try {
+      const activeWorkspace = useWorkspacesStore.getState().activeWorkspace
+      const params: Record<string, string> = { global_only: 'true' }
+      if (activeWorkspace) {
+        params.workspace = activeWorkspace.id
+      }
+      const response = await api.get('/environments/', { params })
+      return response.data
+    } catch (error: unknown) {
+      console.error('Failed to fetch global environments:', error)
+      return []
+    }
+  },
+
+  createEnvironment: async (name, description, collectionId) => {
+    const payload: { name: string; description?: string; collection?: string } = { name, description }
+    if (collectionId) {
+      payload.collection = collectionId
+    }
+    const response = await api.post('/environments/', payload)
     const newEnv = response.data
     set((state) => ({ environments: [...state.environments, newEnv] }))
     return newEnv
@@ -198,39 +223,81 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
     await get().fetchEnvironments()
   },
 
-  resolveVariables: (text) => {
+  getGlobalEnvironments: () => {
+    const { environments } = get()
+    return environments.filter(e => !e.collection)
+  },
+
+  getCollectionEnvironments: (collectionId) => {
+    const { environments } = get()
+    return environments.filter(e => e.collection === collectionId)
+  },
+
+  resolveVariables: (text, collectionEnv) => {
     const { activeEnvironment } = get()
-    if (!activeEnvironment || !text) return text
+    if (!text) return text
 
     const pattern = /\{\{([^}]+)\}\}/g
     return text.replace(pattern, (match, varName) => {
-      const variable = activeEnvironment.variables?.find(
-        (v) => v.key === varName.trim() && v.enabled
-      )
-      if (variable) {
-        // Get currently selected value from multi-value array
-        const values = variable.values || []
-        const selectedIndex = variable.selected_value_index || 0
-        // Use nullish coalescing to preserve empty string values
-        return values[selectedIndex] ?? match
+      const trimmedName = varName.trim()
+
+      // Priority 1: Check collection environment first (if provided and has variables)
+      if (collectionEnv) {
+        const collectionVariable = collectionEnv.variables?.find(
+          (v) => v.key === trimmedName && v.enabled
+        )
+        if (collectionVariable) {
+          const values = collectionVariable.values || []
+          const selectedIndex = collectionVariable.selected_value_index || 0
+          const value = values[selectedIndex]
+          if (value !== undefined) return value
+        }
       }
+
+      // Priority 2: Fall back to global active environment
+      if (activeEnvironment) {
+        const variable = activeEnvironment.variables?.find(
+          (v) => v.key === trimmedName && v.enabled
+        )
+        if (variable) {
+          const values = variable.values || []
+          const selectedIndex = variable.selected_value_index || 0
+          return values[selectedIndex] ?? match
+        }
+      }
+
       return match
     })
   },
 
-  getVariableValue: (key) => {
+  getVariableValue: (key, collectionEnv) => {
     const { activeEnvironment } = get()
-    if (!activeEnvironment) return null
 
-    const variable = activeEnvironment.variables?.find(
-      (v) => v.key === key && v.enabled
-    )
-    if (variable) {
-      const values = variable.values || []
-      const selectedIndex = variable.selected_value_index || 0
-      // Use nullish coalescing to preserve empty string values
-      return values[selectedIndex] ?? null
+    // Priority 1: Check collection environment first
+    if (collectionEnv) {
+      const collectionVariable = collectionEnv.variables?.find(
+        (v) => v.key === key && v.enabled
+      )
+      if (collectionVariable) {
+        const values = collectionVariable.values || []
+        const selectedIndex = collectionVariable.selected_value_index || 0
+        const value = values[selectedIndex]
+        if (value !== undefined) return value
+      }
     }
+
+    // Priority 2: Fall back to global active environment
+    if (activeEnvironment) {
+      const variable = activeEnvironment.variables?.find(
+        (v) => v.key === key && v.enabled
+      )
+      if (variable) {
+        const values = variable.values || []
+        const selectedIndex = variable.selected_value_index || 0
+        return values[selectedIndex] ?? null
+      }
+    }
+
     return null
   },
 }))

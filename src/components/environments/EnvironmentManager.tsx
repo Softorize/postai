@@ -201,6 +201,31 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
               ? displayedEnvironments[0].name
               : 'Environment Manager'}
           </h1>
+          {/* Show variable count and action buttons when viewing single environment */}
+          {environmentId && displayedEnvironments[0] && (
+            <>
+              <span className="text-sm text-text-secondary ml-2">
+                {displayedEnvironments[0].variables?.length || 0} variables
+              </span>
+              <button
+                onClick={() => activateEnvironment(displayedEnvironments[0].id)}
+                className={clsx(
+                  'px-2 py-1 text-xs rounded ml-2',
+                  activeEnvironment?.id === displayedEnvironments[0].id
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-panel hover:bg-white/10'
+                )}
+              >
+                {activeEnvironment?.id === displayedEnvironments[0].id ? 'Active' : 'Activate'}
+              </button>
+              <button
+                onClick={() => handleDeleteEnvironment(displayedEnvironments[0])}
+                className="p-1 hover:bg-red-500/20 rounded text-text-secondary hover:text-red-400 ml-1"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
         {!environmentId && showNewEnvForm ? (
           <div className="flex items-center gap-2">
@@ -262,59 +287,61 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
                 key={env.id}
                 className="border border-border rounded-lg overflow-hidden bg-sidebar"
               >
-                {/* Environment header */}
-                <div
-                  className={clsx(
-                    'flex items-center gap-3 p-3 cursor-pointer hover:bg-white/5',
-                    activeEnvironment?.id === env.id && 'bg-primary-500/10'
-                  )}
-                  onClick={() => toggleExpand(env.id)}
-                >
-                  {expandedEnvs.has(env.id) ? (
-                    <ChevronDown className="w-4 h-4 text-text-secondary" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-text-secondary" />
-                  )}
-                  <Globe
+                {/* Environment header - only show when NOT viewing a single environment */}
+                {!environmentId && (
+                  <div
                     className={clsx(
-                      'w-5 h-5',
-                      activeEnvironment?.id === env.id
-                        ? 'text-primary-400'
-                        : 'text-green-400'
+                      'flex items-center gap-3 p-3 cursor-pointer hover:bg-white/5',
+                      activeEnvironment?.id === env.id && 'bg-primary-500/10'
                     )}
-                  />
-                  <span className="flex-1 font-medium">{env.name}</span>
-                  <span className="text-sm text-text-secondary">
-                    {env.variables?.length || 0} variables
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      activateEnvironment(env.id)
-                    }}
-                    className={clsx(
-                      'px-2 py-1 text-xs rounded',
-                      activeEnvironment?.id === env.id
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-panel hover:bg-white/10'
+                    onClick={() => toggleExpand(env.id)}
+                  >
+                    {expandedEnvs.has(env.id) ? (
+                      <ChevronDown className="w-4 h-4 text-text-secondary" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-text-secondary" />
                     )}
-                  >
-                    {activeEnvironment?.id === env.id ? 'Active' : 'Activate'}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteEnvironment(env)
-                    }}
-                    className="p-1 hover:bg-red-500/20 rounded text-text-secondary hover:text-red-400"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                    <Globe
+                      className={clsx(
+                        'w-5 h-5',
+                        activeEnvironment?.id === env.id
+                          ? 'text-primary-400'
+                          : 'text-green-400'
+                      )}
+                    />
+                    <span className="flex-1 font-medium">{env.name}</span>
+                    <span className="text-sm text-text-secondary">
+                      {env.variables?.length || 0} variables
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        activateEnvironment(env.id)
+                      }}
+                      className={clsx(
+                        'px-2 py-1 text-xs rounded',
+                        activeEnvironment?.id === env.id
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-panel hover:bg-white/10'
+                      )}
+                    >
+                      {activeEnvironment?.id === env.id ? 'Active' : 'Activate'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteEnvironment(env)
+                      }}
+                      className="p-1 hover:bg-red-500/20 rounded text-text-secondary hover:text-red-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
-                {/* Variables list */}
-                {expandedEnvs.has(env.id) && (
-                  <div className="border-t border-border">
+                {/* Variables list - always show when viewing single environment, otherwise show when expanded */}
+                {(environmentId || expandedEnvs.has(env.id)) && (
+                  <div className={clsx(!environmentId && 'border-t border-border')}>
                     {/* Variables table header */}
                     <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-panel text-xs text-text-secondary uppercase">
                       <div className="col-span-2">Variable</div>

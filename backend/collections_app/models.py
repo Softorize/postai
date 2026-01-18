@@ -22,6 +22,13 @@ class Collection(BaseModel):
     test_script = models.TextField(blank=True, default='')
     sync_id = models.CharField(max_length=255, blank=True, null=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
+    active_environment = models.ForeignKey(
+        'environments_app.Environment',
+        on_delete=models.SET_NULL,
+        related_name='active_for_collections',
+        null=True,
+        blank=True
+    )
 
     class Meta:
         ordering = ['name']
