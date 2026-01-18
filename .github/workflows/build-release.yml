@@ -62,7 +62,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: dist/
+          path: |
+            dist/
+            dist-electron/
           retention-days: 1
 
   build-electron:
@@ -92,7 +94,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
-          path: dist/
+          path: .
 
       - name: Build Electron app (ARM64)
         run: npx electron-builder --mac --arm64 --publish never
