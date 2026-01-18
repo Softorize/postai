@@ -341,3 +341,94 @@ class CollectionModelTests(TestCase):
         )
         self.assertEqual(child_folder.parent, parent_folder)
         self.assertIn(child_folder, parent_folder.subfolders.all())
+
+
+class CollectionCreateTests(APITestCase):
+    """Test cases for collection creation endpoint."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.workspace = Workspace.objects.create(name='Test Workspace')
+
+    def test_create_collection_returns_id(self):
+        """Test that collection creation returns the id field.
+
+        This is critical - frontend needs the id to create requests in the collection.
+        """
+        url = '/api/v1/collections/'
+        response = self.client.post(url, {'name': 'New Collection'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+
+        # Must have id for frontend to create requests
+        self.assertIn('id', data)
+        self.assertIsNotNone(data['id'])
+
+    def test_create_collection_returns_empty_folders_and_requests(self):
+        """Test that new collection returns empty folders and requests arrays."""
+        url = '/api/v1/collections/'
+        response = self.client.post(url, {'name': 'New Collection'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+
+        self.assertIn('folders', data)
+        self.assertIn('requests', data)
+        self.assertEqual(data['folders'], [])
+        self.assertEqual(data['requests'], [])
+
+    def test_create_collection_returns_timestamps(self):
+        """Test that collection creation returns timestamps."""
+        url = '/api/v1/collections/'
+        response = self.client.post(url, {'name': 'New Collection'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+
+        self.assertIn('created_at', data)
+        self.assertIn('updated_at', data)
+
+    def test_create_request_in_new_collection(self):
+        """Test creating a request in a newly created collection.
+
+        This is the full workflow that was failing before the fix.
+        """
+        # Step 1: Create collection
+        create_url = '/api/v1/collections/'
+        create_response = self.client.post(create_url, {'name': 'Test Collection'}, format='json')
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+
+        collection_id = create_response.json()['id']
+        self.assertIsNotNone(collection_id)
+
+        # Step 2: Create request in the new collection
+        request_url = f'/api/v1/collections/{collection_id}/requests/'
+        request_response = self.client.post(
+            request_url,
+            {'name': 'Test Request', 'method': 'GET', 'url': ''},
+            format='json'
+        )
+
+        self.assertEqual(request_response.status_code, status.HTTP_201_CREATED)
+        request_data = request_response.json()
+        self.assertEqual(request_data['name'], 'Test Request')
+        self.assertEqual(request_data['collection'], collection_id)
+
+    def test_create_folder_in_new_collection(self):
+        """Test creating a folder in a newly created collection."""
+        # Step 1: Create collection
+        create_url = '/api/v1/collections/'
+        create_response = self.client.post(create_url, {'name': 'Test Collection'}, format='json')
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+
+        collection_id = create_response.json()['id']
+
+        # Step 2: Create folder in the new collection
+        folder_url = f'/api/v1/collections/{collection_id}/folders/'
+        folder_response = self.client.post(folder_url, {'name': 'Test Folder'}, format='json')
+
+        self.assertEqual(folder_response.status_code, status.HTTP_201_CREATED)
+        folder_data = folder_response.json()
+        self.assertEqual(folder_data['name'], 'Test Folder')
+        self.assertEqual(folder_data['collection'], collection_id)

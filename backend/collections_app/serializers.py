@@ -81,4 +81,16 @@ class CollectionCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Collection
-        fields = ['name', 'description']
+        fields = ['id', 'name', 'description', 'folders', 'requests', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'folders', 'requests', 'created_at', 'updated_at']
+
+    folders = serializers.SerializerMethodField()
+    requests = serializers.SerializerMethodField()
+
+    def get_folders(self, obj):
+        """Return empty list for new collections."""
+        return []
+
+    def get_requests(self, obj):
+        """Return empty list for new collections."""
+        return []
