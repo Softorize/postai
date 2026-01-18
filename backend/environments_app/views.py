@@ -51,6 +51,17 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
         workspace = Workspace.get_or_create_default()
         serializer.save(workspace=workspace)
 
+    def create(self, request, *args, **kwargs):
+        """Create environment and return full serializer response."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        # Return full serializer with all fields including collection_name
+        return Response(
+            EnvironmentSerializer(serializer.instance).data,
+            status=status.HTTP_201_CREATED
+        )
+
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
         """Set this environment as active."""
@@ -69,6 +80,7 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
             name=f"{environment.name} (Copy)",
             description=environment.description,
             workspace=environment.workspace,
+            collection=environment.collection,  # Preserve collection association
             is_active=False,  # Don't activate the duplicate
         )
 

@@ -341,3 +341,163 @@ class EnvironmentModelTests(TestCase):
         )
         self.assertEqual(var.key, 'test_key')
         self.assertEqual(len(var.values), 2)
+
+    def test_global_environment_has_no_collection(self):
+        """Test global environment has collection=None."""
+        workspace = Workspace.objects.create(name='Test')
+        env = Environment.objects.create(name='Global Env', workspace=workspace)
+        self.assertIsNone(env.collection)
+
+    def test_collection_scoped_environment(self):
+        """Test environment can be scoped to a collection."""
+        from collections_app.models import Collection
+        workspace = Workspace.objects.create(name='Test')
+        collection = Collection.objects.create(name='Test Collection', workspace=workspace)
+        env = Environment.objects.create(
+            name='Collection Env',
+            workspace=workspace,
+            collection=collection,
+        )
+        self.assertEqual(env.collection, collection)
+        self.assertIn(env, collection.environments.all())
+
+    def test_collection_environment_deleted_with_collection(self):
+        """Test collection-scoped environment is deleted when collection is deleted."""
+        from collections_app.models import Collection
+        workspace = Workspace.objects.create(name='Test')
+        collection = Collection.objects.create(name='Test Collection', workspace=workspace)
+        env = Environment.objects.create(
+            name='Collection Env',
+            workspace=workspace,
+            collection=collection,
+        )
+        env_id = env.id
+        collection.delete()
+        self.assertFalse(Environment.objects.filter(id=env_id).exists())
+
+
+class CollectionScopedEnvironmentAPITests(APITestCase):
+    """Test cases for collection-scoped environment API."""
+
+    def setUp(self):
+        """Set up test data."""
+        from collections_app.models import Collection
+        self.workspace = Workspace.objects.create(name='Test Workspace')
+        self.collection = Collection.objects.create(
+            name='Test Collection',
+            workspace=self.workspace,
+        )
+        self.global_env = Environment.objects.create(
+            name='Global Environment',
+            workspace=self.workspace,
+        )
+        self.collection_env = Environment.objects.create(
+            name='Collection Environment',
+            workspace=self.workspace,
+            collection=self.collection,
+        )
+        # Add variables to both
+        EnvironmentVariable.objects.create(
+            environment=self.global_env,
+            key='base_url',
+            values=['https://global.api.com'],
+            selected_value_index=0,
+            enabled=True,
+        )
+        EnvironmentVariable.objects.create(
+            environment=self.collection_env,
+            key='base_url',
+            values=['https://collection.api.com'],
+            selected_value_index=0,
+            enabled=True,
+        )
+
+    def test_create_global_environment(self):
+        """Test creating a global environment (no collection)."""
+        url = '/api/v1/environments/'
+        response = self.client.post(url, {'name': 'New Global Env'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+        self.assertIsNone(data.get('collection'))
+
+    def test_create_collection_scoped_environment(self):
+        """Test creating a collection-scoped environment."""
+        url = '/api/v1/environments/'
+        response = self.client.post(url, {
+            'name': 'New Collection Env',
+            'collection': str(self.collection.id),
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+        self.assertEqual(data['collection'], str(self.collection.id))
+        self.assertEqual(data['collection_name'], 'Test Collection')
+
+    def test_list_all_environments(self):
+        """Test listing all environments returns both global and collection-scoped."""
+        url = '/api/v1/environments/'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(len(data), 2)
+
+    def test_filter_global_only_environments(self):
+        """Test filtering for global-only environments."""
+        url = '/api/v1/environments/?global_only=true'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]['name'], 'Global Environment')
+        self.assertIsNone(data[0].get('collection'))
+
+    def test_filter_by_collection(self):
+        """Test filtering environments by collection."""
+        url = f'/api/v1/environments/?collection={self.collection.id}'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]['name'], 'Collection Environment')
+        self.assertEqual(data[0]['collection'], str(self.collection.id))
+
+    def test_environment_serializer_includes_collection_name(self):
+        """Test environment serializer includes collection_name for collection-scoped envs."""
+        url = f'/api/v1/environments/{self.collection_env.id}/'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data['collection_name'], 'Test Collection')
+
+    def test_export_postai_includes_collection_id(self):
+        """Test PostAI export includes collection_id for collection-scoped environments."""
+        url = f'/api/v1/environments/{self.collection_env.id}/export/?export_format=postai'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data['collection_id'], str(self.collection.id))
+
+    def test_export_postai_global_env_no_collection_id(self):
+        """Test PostAI export excludes collection_id for global environments."""
+        url = f'/api/v1/environments/{self.global_env.id}/export/?export_format=postai'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIsNone(data.get('collection_id'))
+
+    def test_duplicate_collection_environment(self):
+        """Test duplicating a collection-scoped environment."""
+        url = f'/api/v1/environments/{self.collection_env.id}/duplicate/'
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+        self.assertEqual(data['name'], 'Collection Environment (Copy)')
+        self.assertEqual(data['collection'], str(self.collection.id))

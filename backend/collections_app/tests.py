@@ -4,6 +4,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from .models import Collection, Folder, Request
 from core.models import Workspace
+from environments_app.models import Environment, EnvironmentVariable
 
 
 class CollectionExportTests(APITestCase):
@@ -432,3 +433,193 @@ class CollectionCreateTests(APITestCase):
         folder_data = folder_response.json()
         self.assertEqual(folder_data['name'], 'Test Folder')
         self.assertEqual(folder_data['collection'], collection_id)
+
+
+class CollectionActiveEnvironmentTests(APITestCase):
+    """Test cases for collection active environment functionality."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.workspace = Workspace.objects.create(name='Test Workspace')
+        self.collection = Collection.objects.create(
+            name='Test Collection',
+            workspace=self.workspace,
+        )
+        # Create a collection-scoped environment
+        self.collection_env = Environment.objects.create(
+            name='Collection Environment',
+            workspace=self.workspace,
+            collection=self.collection,
+        )
+        EnvironmentVariable.objects.create(
+            environment=self.collection_env,
+            key='base_url',
+            values=['https://collection.api.com'],
+            selected_value_index=0,
+            enabled=True,
+        )
+
+    def test_collection_has_no_active_environment_by_default(self):
+        """Test new collection has no active environment."""
+        url = f'/api/v1/collections/{self.collection.id}/'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIsNone(data.get('active_environment_id'))
+
+    def test_set_collection_active_environment(self):
+        """Test setting collection's active environment."""
+        url = f'/api/v1/collections/{self.collection.id}/set-environment/'
+        response = self.client.post(url, {
+            'environment_id': str(self.collection_env.id)
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data['active_environment_id'], str(self.collection_env.id))
+
+    def test_clear_collection_active_environment(self):
+        """Test clearing collection's active environment."""
+        # First set an active environment
+        self.collection.active_environment = self.collection_env
+        self.collection.save()
+
+        url = f'/api/v1/collections/{self.collection.id}/set-environment/'
+        response = self.client.post(url, {
+            'environment_id': None
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIsNone(data.get('active_environment_id'))
+
+    def test_set_invalid_environment_returns_error(self):
+        """Test setting non-existent environment returns error."""
+        url = f'/api/v1/collections/{self.collection.id}/set-environment/'
+        response = self.client.post(url, {
+            'environment_id': '00000000-0000-0000-0000-000000000000'
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_collection_serializer_includes_environments(self):
+        """Test collection serializer includes environments array."""
+        url = f'/api/v1/collections/{self.collection.id}/'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIn('environments', data)
+        self.assertEqual(len(data['environments']), 1)
+        self.assertEqual(data['environments'][0]['name'], 'Collection Environment')
+
+    def test_active_environment_cleared_when_env_deleted(self):
+        """Test active_environment is cleared when environment is deleted."""
+        # Set active environment
+        self.collection.active_environment = self.collection_env
+        self.collection.save()
+
+        # Delete the environment
+        self.collection_env.delete()
+
+        # Refresh collection
+        self.collection.refresh_from_db()
+        self.assertIsNone(self.collection.active_environment)
+
+
+class CollectionExportFormatTests(APITestCase):
+    """Test cases for collection export with different formats."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.workspace = Workspace.objects.create(name='Test Workspace')
+        self.collection = Collection.objects.create(
+            name='Test Collection',
+            description='Test description',
+            workspace=self.workspace,
+        )
+        # Create collection-scoped environment
+        self.collection_env = Environment.objects.create(
+            name='Collection Environment',
+            workspace=self.workspace,
+            collection=self.collection,
+        )
+        EnvironmentVariable.objects.create(
+            environment=self.collection_env,
+            key='api_key',
+            values=['secret-123'],
+            selected_value_index=0,
+            enabled=True,
+        )
+        # Create a request
+        self.request = Request.objects.create(
+            collection=self.collection,
+            name='Test Request',
+            method='GET',
+            url='{{base_url}}/test',
+        )
+
+    def test_export_postman_format(self):
+        """Test export with Postman format."""
+        url = f'/api/v1/collections/{self.collection.id}/export/?export_format=postman'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        # Check Postman format markers
+        self.assertIn('info', data)
+        self.assertEqual(
+            data['info']['schema'],
+            'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
+        )
+        # Should NOT include collection environments
+        self.assertNotIn('environments', data)
+
+    def test_export_postai_format(self):
+        """Test export with PostAI format."""
+        url = f'/api/v1/collections/{self.collection.id}/export/?export_format=postai'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        # Check PostAI format markers
+        self.assertTrue(data.get('_postai_format'))
+        self.assertEqual(data['_postai_version'], '1.0')
+
+    def test_export_postai_includes_environments(self):
+        """Test PostAI export includes collection environments by default."""
+        url = f'/api/v1/collections/{self.collection.id}/export/?export_format=postai'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        self.assertIn('environments', data)
+        self.assertEqual(len(data['environments']), 1)
+        self.assertEqual(data['environments'][0]['name'], 'Collection Environment')
+
+    def test_export_postai_exclude_environments(self):
+        """Test PostAI export can exclude environments."""
+        url = f'/api/v1/collections/{self.collection.id}/export/?export_format=postai&include_environments=false'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        # Environments should be empty or not present
+        self.assertEqual(data.get('environments', []), [])
+
+    def test_export_default_is_postman(self):
+        """Test export defaults to Postman format."""
+        url = f'/api/v1/collections/{self.collection.id}/export/'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        # Should be Postman format (has 'info' with schema)
+        self.assertIn('info', data)
+        self.assertIn('schema', data['info'])
