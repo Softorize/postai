@@ -47,6 +47,17 @@ dmg:
     width: 540
     height: 380
 
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Development
+  icon: resources/icon.png
+
+appImage:
+  artifactName: "${productName}-${version}-linux-x64.${ext}"
+
 publish:
   provider: github
   owner: GrigoriLab
