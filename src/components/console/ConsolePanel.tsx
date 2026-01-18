@@ -405,7 +405,7 @@ export function ConsolePanel() {
                         {entry.name}
                       </span>
                     )}
-                    <span className="text-xs text-text-secondary font-mono truncate block">
+                    <span className="text-xs text-text-secondary font-mono break-all">
                       {entry.url}
                     </span>
                   </div>
