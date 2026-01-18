@@ -174,7 +174,7 @@ exe = EXE(
     upx=True,
     console=True,
     disable_windowed_traceback=False,
-    argv_emulation=True,
+    argv_emulation=sys.platform == 'darwin',  # macOS only
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
