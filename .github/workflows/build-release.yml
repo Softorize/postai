@@ -90,6 +90,9 @@ jobs:
           name: backend-build
           path: backend/dist/
 
+      - name: Restore backend execute permissions
+        run: chmod +x backend/dist/postai-server/postai-server
+
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
