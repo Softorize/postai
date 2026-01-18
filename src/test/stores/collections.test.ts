@@ -193,7 +193,6 @@ describe('Collections Store', () => {
 
     describe('exportCollection with format options', () => {
       // Mock DOM APIs for download
-      const mockCreateElement = vi.fn()
       const mockAppendChild = vi.fn()
       const mockRemoveChild = vi.fn()
       const mockClick = vi.fn()
