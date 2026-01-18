@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { Environment } from '@/types'
 
 // Mock the API client
 vi.mock('@/api/client', () => ({
@@ -22,6 +23,33 @@ vi.mock('@/stores/workspaces.store', () => ({
 import { api } from '@/api/client'
 import { useEnvironmentsStore } from '@/stores/environments.store'
 
+// Helper to create mock environment with minimal required fields for testing
+const createMockEnv = (overrides: Partial<Environment> = {}): Environment => ({
+  id: 'env-1',
+  name: 'Test',
+  description: '',
+  is_active: true,
+  variables: [],
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+  ...overrides,
+})
+
+// Helper to create mock variable with minimal required fields for testing
+const createMockVariable = (overrides: Record<string, unknown> = {}) => ({
+  id: 'v1',
+  environment: 'env-1',
+  key: 'test',
+  values: ['value'],
+  selected_value_index: 0,
+  description: '',
+  is_secret: false,
+  enabled: true,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+  ...overrides,
+})
+
 describe('Environments Store', () => {
   beforeEach(() => {
     // Reset store state
@@ -36,11 +64,11 @@ describe('Environments Store', () => {
 
   describe('duplicateEnvironment', () => {
     it('should call API to duplicate environment', async () => {
-      const mockDuplicatedEnv = {
+      const mockDuplicatedEnv = createMockEnv({
         id: 'env-2',
         name: 'Test Environment (Copy)',
-        variables: [],
-      }
+        is_active: false,
+      })
       vi.mocked(api.post).mockResolvedValue({ data: mockDuplicatedEnv })
 
       const result = await useEnvironmentsStore.getState().duplicateEnvironment('env-1')
@@ -50,8 +78,12 @@ describe('Environments Store', () => {
     })
 
     it('should add duplicated environment to state', async () => {
-      const existingEnv = { id: 'env-1', name: 'Test', variables: [] }
-      const mockDuplicatedEnv = { id: 'env-2', name: 'Test (Copy)', variables: [] }
+      const existingEnv = createMockEnv({ id: 'env-1', name: 'Test' })
+      const mockDuplicatedEnv = createMockEnv({
+        id: 'env-2',
+        name: 'Test (Copy)',
+        is_active: false,
+      })
 
       useEnvironmentsStore.setState({ environments: [existingEnv] })
       vi.mocked(api.post).mockResolvedValue({ data: mockDuplicatedEnv })
@@ -66,13 +98,9 @@ describe('Environments Store', () => {
 
   describe('resolveVariables', () => {
     it('should resolve single variable', () => {
-      const env = {
-        id: 'env-1',
-        name: 'Test',
-        variables: [
-          { id: 'v1', key: 'username', values: ['john'], selected_value_index: 0, enabled: true }
-        ]
-      }
+      const env = createMockEnv({
+        variables: [createMockVariable({ key: 'username', values: ['john'] })]
+      }) as Environment
       useEnvironmentsStore.setState({ activeEnvironment: env })
 
       const result = useEnvironmentsStore.getState().resolveVariables('Hello {{username}}!')
@@ -80,14 +108,12 @@ describe('Environments Store', () => {
     })
 
     it('should resolve multiple variables', () => {
-      const env = {
-        id: 'env-1',
-        name: 'Test',
+      const env = createMockEnv({
         variables: [
-          { id: 'v1', key: 'host', values: ['api.example.com'], selected_value_index: 0, enabled: true },
-          { id: 'v2', key: 'port', values: ['8080'], selected_value_index: 0, enabled: true }
+          createMockVariable({ id: 'v1', key: 'host', values: ['api.example.com'] }),
+          createMockVariable({ id: 'v2', key: 'port', values: ['8080'] })
         ]
-      }
+      }) as Environment
       useEnvironmentsStore.setState({ activeEnvironment: env })
 
       const result = useEnvironmentsStore.getState().resolveVariables('https://{{host}}:{{port}}/api')
@@ -95,13 +121,9 @@ describe('Environments Store', () => {
     })
 
     it('should use selected value from multi-value variable', () => {
-      const env = {
-        id: 'env-1',
-        name: 'Test',
-        variables: [
-          { id: 'v1', key: 'env', values: ['dev', 'staging', 'prod'], selected_value_index: 1, enabled: true }
-        ]
-      }
+      const env = createMockEnv({
+        variables: [createMockVariable({ key: 'env', values: ['dev', 'staging', 'prod'], selected_value_index: 1 })]
+      }) as Environment
       useEnvironmentsStore.setState({ activeEnvironment: env })
 
       const result = useEnvironmentsStore.getState().resolveVariables('Environment: {{env}}')
@@ -109,13 +131,9 @@ describe('Environments Store', () => {
     })
 
     it('should not resolve disabled variables', () => {
-      const env = {
-        id: 'env-1',
-        name: 'Test',
-        variables: [
-          { id: 'v1', key: 'disabled', values: ['value'], selected_value_index: 0, enabled: false }
-        ]
-      }
+      const env = createMockEnv({
+        variables: [createMockVariable({ key: 'disabled', values: ['value'], enabled: false })]
+      }) as Environment
       useEnvironmentsStore.setState({ activeEnvironment: env })
 
       const result = useEnvironmentsStore.getState().resolveVariables('Test {{disabled}}')
@@ -123,11 +141,7 @@ describe('Environments Store', () => {
     })
 
     it('should leave unknown variables unchanged', () => {
-      const env = {
-        id: 'env-1',
-        name: 'Test',
-        variables: []
-      }
+      const env = createMockEnv({ variables: [] })
       useEnvironmentsStore.setState({ activeEnvironment: env })
 
       const result = useEnvironmentsStore.getState().resolveVariables('Hello {{unknown}}!')
@@ -147,13 +161,9 @@ describe('Environments Store', () => {
     })
 
     it('should preserve empty string variable values', () => {
-      const env = {
-        id: 'env-1',
-        name: 'Test',
-        variables: [
-          { id: 'v1', key: 'empty', values: [''], selected_value_index: 0, enabled: true }
-        ]
-      }
+      const env = createMockEnv({
+        variables: [createMockVariable({ key: 'empty', values: [''] })]
+      }) as Environment
       useEnvironmentsStore.setState({ activeEnvironment: env })
 
       const result = useEnvironmentsStore.getState().resolveVariables('Value: [{{empty}}]')
@@ -163,13 +173,9 @@ describe('Environments Store', () => {
 
   describe('getVariableValue', () => {
     it('should return value for existing variable', () => {
-      const env = {
-        id: 'env-1',
-        name: 'Test',
-        variables: [
-          { id: 'v1', key: 'apiKey', values: ['secret123'], selected_value_index: 0, enabled: true }
-        ]
-      }
+      const env = createMockEnv({
+        variables: [createMockVariable({ key: 'apiKey', values: ['secret123'] })]
+      }) as Environment
       useEnvironmentsStore.setState({ activeEnvironment: env })
 
       const result = useEnvironmentsStore.getState().getVariableValue('apiKey')
@@ -177,11 +183,7 @@ describe('Environments Store', () => {
     })
 
     it('should return null for non-existent variable', () => {
-      const env = {
-        id: 'env-1',
-        name: 'Test',
-        variables: []
-      }
+      const env = createMockEnv({ variables: [] })
       useEnvironmentsStore.setState({ activeEnvironment: env })
 
       const result = useEnvironmentsStore.getState().getVariableValue('nonexistent')

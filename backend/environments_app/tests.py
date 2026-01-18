@@ -220,6 +220,103 @@ class EnvironmentExportTests(APITestCase):
         self.assertEqual(empty_var['values'], [])
 
 
+class EnvironmentDuplicateTests(APITestCase):
+    """Test cases for environment duplicate endpoint."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.workspace = Workspace.objects.create(name='Test Workspace')
+        self.environment = Environment.objects.create(
+            name='Original Environment',
+            description='Original description',
+            workspace=self.workspace,
+            is_active=True,
+        )
+        # Create some variables
+        self.var1 = EnvironmentVariable.objects.create(
+            environment=self.environment,
+            key='api_url',
+            values=['https://api.example.com'],
+            selected_value_index=0,
+            enabled=True,
+            is_secret=False,
+        )
+        self.var2 = EnvironmentVariable.objects.create(
+            environment=self.environment,
+            key='api_key',
+            values=['secret-key-1', 'secret-key-2'],
+            selected_value_index=1,
+            enabled=True,
+            is_secret=True,
+        )
+
+    def test_duplicate_environment(self):
+        """Test duplicating an environment creates a copy."""
+        url = f'/api/v1/environments/{self.environment.id}/duplicate/'
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+
+        # Check the duplicated environment
+        self.assertEqual(data['name'], 'Original Environment (Copy)')
+        self.assertEqual(data['description'], 'Original description')
+        self.assertFalse(data['is_active'])  # Duplicate should not be active
+        self.assertNotEqual(data['id'], str(self.environment.id))
+
+    def test_duplicate_copies_variables(self):
+        """Test duplicating an environment copies all variables."""
+        url = f'/api/v1/environments/{self.environment.id}/duplicate/'
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+
+        # Check that variables were copied
+        self.assertEqual(len(data['variables']), 2)
+
+        # Find copied variables
+        var_keys = [v['key'] for v in data['variables']]
+        self.assertIn('api_url', var_keys)
+        self.assertIn('api_key', var_keys)
+
+        # Check multi-value variable was copied correctly
+        api_key_var = next(v for v in data['variables'] if v['key'] == 'api_key')
+        # Secret values are masked in response, but should have same count
+        self.assertEqual(len(api_key_var['values']), 2)
+        self.assertEqual(api_key_var['selected_value_index'], 1)
+        self.assertTrue(api_key_var['is_secret'])
+
+        # Verify actual values in database are copied correctly
+        duplicated_env = Environment.objects.get(id=data['id'])
+        duplicated_api_key = duplicated_env.variables.get(key='api_key')
+        self.assertEqual(duplicated_api_key.values, ['secret-key-1', 'secret-key-2'])
+
+    def test_duplicate_does_not_affect_original(self):
+        """Test duplicating does not modify the original environment."""
+        original_var_count = self.environment.variables.count()
+
+        url = f'/api/v1/environments/{self.environment.id}/duplicate/'
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Refresh original from database
+        self.environment.refresh_from_db()
+
+        # Original should be unchanged
+        self.assertEqual(self.environment.name, 'Original Environment')
+        self.assertTrue(self.environment.is_active)
+        self.assertEqual(self.environment.variables.count(), original_var_count)
+
+    def test_duplicate_nonexistent_environment(self):
+        """Test duplicating nonexistent environment returns 404."""
+        url = '/api/v1/environments/00000000-0000-0000-0000-000000000000/duplicate/'
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
 class EnvironmentModelTests(TestCase):
     """Test cases for Environment model."""
 

@@ -35,6 +35,21 @@ describe('Collections Store', () => {
   })
 
   describe('duplicateRequest', () => {
+    const createMockCollection = (overrides = {}) => ({
+      id: 'col-1',
+      name: 'Test Collection',
+      description: '',
+      schema_version: '1.0',
+      variables: [],
+      pre_request_script: '',
+      test_script: '',
+      folders: [],
+      requests: [],
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+      ...overrides,
+    })
+
     it('should call API to duplicate request', async () => {
       const mockDuplicatedRequest = {
         id: 'req-2',
@@ -46,12 +61,9 @@ describe('Collections Store', () => {
       vi.mocked(api.get).mockResolvedValue({ data: [] }) // Mock fetchCollections
 
       // Set up initial state with a collection containing the request
-      const initialCollection = {
-        id: 'col-1',
-        name: 'Test Collection',
+      const initialCollection = createMockCollection({
         requests: [{ id: 'req-1', name: 'Test Request', method: 'GET', url: 'https://api.com' }],
-        folders: [],
-      }
+      })
       useCollectionsStore.setState({ collections: [initialCollection] })
 
       const result = await useCollectionsStore.getState().duplicateRequest('col-1', 'req-1')
@@ -63,12 +75,9 @@ describe('Collections Store', () => {
     it('should return the duplicated request', async () => {
       const mockDuplicatedRequest = { id: 'req-2', name: 'Test (Copy)', method: 'GET', url: 'https://api.com' }
 
-      const initialCollection = {
-        id: 'col-1',
-        name: 'Test Collection',
+      const initialCollection = createMockCollection({
         requests: [{ id: 'req-1', name: 'Test', method: 'GET', url: 'https://api.com' }],
-        folders: [],
-      }
+      })
       useCollectionsStore.setState({ collections: [initialCollection] })
       vi.mocked(api.post).mockResolvedValue({ data: mockDuplicatedRequest })
       vi.mocked(api.get).mockResolvedValue({ data: [] }) // Mock fetchCollections
@@ -83,12 +92,9 @@ describe('Collections Store', () => {
     it('should call fetchCollections after duplicating', async () => {
       const mockDuplicatedRequest = { id: 'req-2', name: 'Test (Copy)', method: 'GET', url: 'https://api.com' }
 
-      const initialCollection = {
-        id: 'col-1',
-        name: 'Test Collection',
+      const initialCollection = createMockCollection({
         requests: [{ id: 'req-1', name: 'Test', method: 'GET', url: 'https://api.com' }],
-        folders: [],
-      }
+      })
       useCollectionsStore.setState({ collections: [initialCollection] })
       vi.mocked(api.post).mockResolvedValue({ data: mockDuplicatedRequest })
       vi.mocked(api.get).mockResolvedValue({ data: [] }) // Mock fetchCollections

@@ -46,6 +46,34 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
         environment.save()
         return Response(EnvironmentSerializer(environment).data)
 
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        """Duplicate an environment with all its variables."""
+        environment = self.get_object()
+
+        # Create duplicate environment
+        duplicate_env = Environment.objects.create(
+            name=f"{environment.name} (Copy)",
+            description=environment.description,
+            workspace=environment.workspace,
+            is_active=False,  # Don't activate the duplicate
+        )
+
+        # Duplicate all variables
+        for variable in environment.variables.all():
+            EnvironmentVariable.objects.create(
+                environment=duplicate_env,
+                key=variable.key,
+                values=variable.values.copy() if variable.values else [],
+                selected_value_index=variable.selected_value_index,
+                description=variable.description,
+                is_secret=variable.is_secret,
+                enabled=variable.enabled,
+                link_group=variable.link_group,
+            )
+
+        return Response(EnvironmentSerializer(duplicate_env).data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
         """Export environment in Postman or PostAI format.
