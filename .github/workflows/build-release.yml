@@ -35,22 +35,20 @@ jobs:
           retention-days: 1
 
   build-backend-linux:
-    # Use ubuntu-20.04 for GLIBC 2.31 compatibility with older Linux distros
-    runs-on: ubuntu-20.04
+    # Use manylinux container for GLIBC 2.28 compatibility with older Linux distros
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - name: Install dependencies
+      - name: Install Python 3.13 and build backend
         working-directory: backend
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-      - name: Build backend
-        working-directory: backend
-        run: pyinstaller postai_server.spec --clean --noconfirm
+          # Use Python 3.12 (available in manylinux_2_28) for better compatibility
+          /opt/python/cp312-cp312/bin/python -m pip install --upgrade pip
+          /opt/python/cp312-cp312/bin/pip install -r requirements.txt
+          /opt/python/cp312-cp312/bin/pip install pyinstaller
+          /opt/python/cp312-cp312/bin/pyinstaller postai_server.spec --clean --noconfirm
       - uses: actions/upload-artifact@v4
         with:
           name: backend-build-linux
