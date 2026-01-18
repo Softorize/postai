@@ -9,6 +9,11 @@ import os
 import sys
 import argparse
 
+# Early logging to help debug startup issues
+print(f"PostAI server starting...", flush=True)
+print(f"Python version: {sys.version}", flush=True)
+print(f"Frozen: {getattr(sys, 'frozen', False)}", flush=True)
+
 
 def get_base_path():
     """Get the base path for the application."""
@@ -22,6 +27,7 @@ def get_base_path():
 
 def setup_django():
     """Configure Django settings."""
+    print("Setting up Django...", flush=True)
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'postai.settings')
 
     # Set database path from environment or use default
@@ -29,8 +35,11 @@ def setup_django():
         base_path = get_base_path()
         os.environ['POSTAI_DB_PATH'] = os.path.join(base_path, 'postai.db')
 
+    print(f"Database path: {os.environ.get('POSTAI_DB_PATH')}", flush=True)
+
     import django
     django.setup()
+    print("Django setup complete.", flush=True)
 
 
 def check_migrations_needed():
@@ -51,21 +60,21 @@ def run_migrations():
     from django.core.management import call_command
 
     if not check_migrations_needed():
-        print("Database is up to date, skipping migrations.")
+        print("Database is up to date, skipping migrations.", flush=True)
         return
 
-    print("Running database migrations...")
+    print("Running database migrations...", flush=True)
     try:
         call_command('migrate', '--run-syncdb', verbosity=1)
-        print("Migrations completed successfully.")
+        print("Migrations completed successfully.", flush=True)
     except Exception as e:
-        print(f"Migration warning: {e}")
+        print(f"Migration warning: {e}", flush=True)
 
 
 def run_server(host='127.0.0.1', port=8765):
     """Start the Django development server."""
     from django.core.management import call_command
-    print(f"Starting PostAI backend server on {host}:{port}")
+    print(f"Starting PostAI backend server on {host}:{port}", flush=True)
     call_command('runserver', f'{host}:{port}', '--noreload')
 
 
@@ -81,17 +90,23 @@ def main():
 
     args = parser.parse_args()
 
-    setup_django()
+    try:
+        setup_django()
 
-    if args.command == 'migrate':
-        run_migrations()
-    elif args.command == 'shell':
-        from django.core.management import call_command
-        call_command('shell')
-    else:  # runserver
-        if not args.skip_migrations:
+        if args.command == 'migrate':
             run_migrations()
-        run_server(args.host, args.port)
+        elif args.command == 'shell':
+            from django.core.management import call_command
+            call_command('shell')
+        else:  # runserver
+            if not args.skip_migrations:
+                run_migrations()
+            run_server(args.host, args.port)
+    except Exception as e:
+        print(f"Fatal error: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == '__main__':

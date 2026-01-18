@@ -122,6 +122,7 @@ export class DjangoManager {
           env: {
             ...process.env,
             POSTAI_DB_PATH: this.getDatabasePath(),
+            PYTHONUNBUFFERED: '1',  // Ensure output is flushed immediately
           },
         }
       )
@@ -130,6 +131,7 @@ export class DjangoManager {
         const output = data.toString()
         console.log(`PostAI: ${output}`)
 
+        // Check for server ready signals
         if (output.includes('Starting PostAI backend') || output.includes('Starting development server') || output.includes('Quit the server')) {
           this.isReady = true
           this.startHealthCheck()
@@ -143,8 +145,10 @@ export class DjangoManager {
 
       this.process.stderr?.on('data', (data) => {
         const output = data.toString()
+        // Log stderr but don't treat as fatal - Django logs info to stderr
         console.log(`PostAI: ${output}`)
 
+        // Check for server ready signals (Django logs to stderr)
         if (output.includes('Starting PostAI backend') || output.includes('Starting development server') || output.includes('Quit the server')) {
           this.isReady = true
           this.startHealthCheck()
@@ -168,7 +172,7 @@ export class DjangoManager {
         this.stopHealthCheck()
       })
 
-      // Timeout for startup
+      // Timeout for startup (30s to allow for slower Linux/PyInstaller startup)
       this.startupTimeout = setTimeout(() => {
         this.checkHealth().then((healthy) => {
           if (healthy) {
@@ -179,7 +183,7 @@ export class DjangoManager {
             reject(new Error('PostAI server startup timeout'))
           }
         })
-      }, 15000)
+      }, 30000)
     })
   }
 

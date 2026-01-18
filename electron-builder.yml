@@ -53,7 +53,7 @@ linux:
       arch:
         - x64
   category: Development
-  icon: resources/icon.png
+  icon: resources/icons
 
 appImage:
   artifactName: "${productName}-${version}-linux-x64.${ext}"
