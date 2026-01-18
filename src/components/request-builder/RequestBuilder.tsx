@@ -428,17 +428,42 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
       }
     }
 
-    // Build query params
-    const queryParams = new URLSearchParams()
+    // Build query params - merge URL params with Params tab (Params tab takes precedence)
+    let baseUrl = scriptRequest.url
+    let existingParams = new URLSearchParams()
+
+    // Extract existing query params from URL
+    const questionMarkIndex = scriptRequest.url.indexOf('?')
+    if (questionMarkIndex !== -1) {
+      baseUrl = scriptRequest.url.substring(0, questionMarkIndex)
+      const queryString = scriptRequest.url.substring(questionMarkIndex + 1)
+      existingParams = new URLSearchParams(queryString)
+    }
+
+    // Build params from Params tab (these take precedence)
+    const tabParams = new Map<string, string>()
     params.forEach((p) => {
       if (p.enabled && p.key) {
-        queryParams.append(resolveVariables(p.key), resolveVariables(p.value))
+        tabParams.set(resolveVariables(p.key), resolveVariables(p.value))
       }
     })
 
-    let finalUrl = queryParams.toString()
-      ? `${scriptRequest.url}${scriptRequest.url.includes('?') ? '&' : '?'}${queryParams}`
-      : scriptRequest.url
+    // Merge: start with existing URL params, then override with Params tab
+    const mergedParams = new URLSearchParams()
+    existingParams.forEach((value, key) => {
+      // Only add if not overridden by Params tab
+      if (!tabParams.has(key)) {
+        mergedParams.append(key, value)
+      }
+    })
+    // Add all Params tab entries
+    tabParams.forEach((value, key) => {
+      mergedParams.append(key, value)
+    })
+
+    let finalUrl = mergedParams.toString()
+      ? `${baseUrl}?${mergedParams}`
+      : baseUrl
 
     // Apply API key auth to URL if needed
     finalUrl = applyApiKeyToParams(finalUrl, auth, resolveVariables)
