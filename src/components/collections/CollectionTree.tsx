@@ -11,6 +11,7 @@ import {
   GitBranch,
   Pencil,
   Download,
+  Copy,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useCollectionsStore } from '@/stores/collections.store'
@@ -483,7 +484,7 @@ function RequestItem({
   searchQuery: string
 }) {
   const { openTab, activeTabId, tabs, updateTab } = useTabsStore()
-  const { deleteRequest, updateRequest, highlightedRequestId } = useCollectionsStore()
+  const { deleteRequest, updateRequest, duplicateRequest, highlightedRequestId } = useCollectionsStore()
   const { workflows, fetchWorkflows, addNodeToWorkflow } = useWorkflowsStore()
   const [showMenu, setShowMenu] = useState(false)
   const [showWorkflowPicker, setShowWorkflowPicker] = useState(false)
@@ -605,6 +606,17 @@ function RequestItem({
           >
             <Pencil className="w-4 h-4" />
             Rename
+          </button>
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left"
+            onClick={async (e) => {
+              e.stopPropagation()
+              setShowMenu(false)
+              await duplicateRequest(collectionId, request.id)
+            }}
+          >
+            <Copy className="w-4 h-4" />
+            Duplicate
           </button>
           <button
             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm text-left"

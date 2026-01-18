@@ -30,6 +30,7 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
     createEnvironment,
     activateEnvironment,
     deleteEnvironment,
+    duplicateEnvironment,
     exportEnvironment,
   } = useEnvironmentsStore()
 
@@ -130,6 +131,7 @@ export function EnvironmentList({ searchQuery }: EnvironmentListProps) {
             onClick={() => handleOpenEnvironment(env)}
             onEdit={() => handleOpenEnvironment(env)}
             onDelete={() => handleDelete(env)}
+            onDuplicate={() => duplicateEnvironment(env.id)}
             onExport={() => handleExport(env)}
           />
         ))
@@ -169,6 +171,7 @@ function EnvironmentItem({
   onClick,
   onEdit,
   onDelete,
+  onDuplicate,
   onExport,
 }: {
   environment: Environment
@@ -177,6 +180,7 @@ function EnvironmentItem({
   onClick: () => void
   onEdit: () => void
   onDelete: () => void
+  onDuplicate: () => void
   onExport: () => void
 }) {
   const [showMenu, setShowMenu] = useState(false)
@@ -227,7 +231,7 @@ function EnvironmentItem({
             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 text-sm"
             onClick={(e) => {
               e.stopPropagation()
-              // TODO: Duplicate
+              onDuplicate()
               setShowMenu(false)
             }}
           >

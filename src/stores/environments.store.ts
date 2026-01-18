@@ -26,6 +26,7 @@ interface EnvironmentsState {
   createEnvironment: (name: string, description?: string) => Promise<Environment>
   updateEnvironment: (id: string, data: Partial<Environment>) => Promise<void>
   deleteEnvironment: (id: string) => Promise<void>
+  duplicateEnvironment: (id: string) => Promise<Environment>
   activateEnvironment: (id: string) => Promise<void>
   getActiveEnvironment: () => Promise<Environment | null>
   importEnvironment: (content: string) => Promise<ImportResult>
@@ -88,6 +89,15 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
       environments: state.environments.filter((e) => e.id !== id),
       activeEnvironment: state.activeEnvironment?.id === id ? null : state.activeEnvironment,
     }))
+  },
+
+  duplicateEnvironment: async (id) => {
+    const response = await api.post(`/environments/${id}/duplicate/`)
+    const newEnvironment = response.data
+    set((state) => ({
+      environments: [...state.environments, newEnvironment],
+    }))
+    return newEnvironment
   },
 
   activateEnvironment: async (id) => {
