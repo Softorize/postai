@@ -35,8 +35,8 @@ jobs:
           retention-days: 1
 
   build-backend-linux:
-    # Use ubuntu-22.04 for GLIBC 2.35 compatibility with older Linux distros
-    runs-on: ubuntu-22.04
+    # Use ubuntu-20.04 for GLIBC 2.31 compatibility with older Linux distros
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
