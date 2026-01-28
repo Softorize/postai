@@ -14,5 +14,6 @@ urlpatterns = [
         path('ai/', include('ai_app.urls')),
         path('proxy/', include('proxy_app.urls')),
         path('sync/', include('sync_app.urls')),
+        path('license/', include('licensing_app.urls')),
     ])),
 ]

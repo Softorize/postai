@@ -356,6 +356,15 @@ export interface AiMessage extends BaseModel {
   tokens_used: number
 }
 
+// License types
+export interface LicenseStatus {
+  trial_started_at: string
+  days_remaining: number
+  is_trial: boolean
+  is_activated: boolean
+  is_expired: boolean
+}
+
 // Proxy types
 export type ProxyType = 'http' | 'https' | 'socks4' | 'socks5'
 
