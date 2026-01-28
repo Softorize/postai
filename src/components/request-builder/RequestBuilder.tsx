@@ -531,6 +531,7 @@ export function RequestBuilder({ request, tabId }: RequestBuilderProps) {
         body: result.data.body,
         size: result.data.size,
         time: result.data.time,
+        timings: result.data.timings,
       }
 
       setResponse(responseData)

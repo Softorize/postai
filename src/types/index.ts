@@ -190,6 +190,16 @@ export interface RequestHistory extends BaseModel {
   error_message?: string
 }
 
+// Timing breakdown for response
+export interface TimingBreakdown {
+  dns_lookup: number
+  tcp_handshake: number
+  ssl_handshake: number
+  ttfb: number
+  download: number
+  total: number
+}
+
 // Response types
 export interface Response {
   status_code: number
@@ -198,6 +208,7 @@ export interface Response {
   body: string
   size: number
   time: number
+  timings?: TimingBreakdown
   cookies?: Cookie[]
 }
 

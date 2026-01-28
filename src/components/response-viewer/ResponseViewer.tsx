@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Copy, Check, AlertCircle, Loader2 } from 'lucide-react'
-import { Response } from '@/types'
+import { Copy, Check, AlertCircle, Loader2, Download } from 'lucide-react'
+import { Response, TimingBreakdown } from '@/types'
 
 type TabId = 'body' | 'headers' | 'cookies'
 
@@ -14,6 +14,7 @@ interface ResponseViewerProps {
 export function ResponseViewer({ response, error, isLoading }: ResponseViewerProps) {
   const [activeTab, setActiveTab] = useState<TabId>('body')
   const [copied, setCopied] = useState(false)
+  const [showTimings, setShowTimings] = useState(false)
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'body', label: 'Body' },
@@ -27,6 +28,24 @@ export function ResponseViewer({ response, error, isLoading }: ResponseViewerPro
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
+  }
+
+  const handleSave = (res: Response) => {
+    const contentType = res.headers['content-type'] || res.headers['Content-Type'] || ''
+    let ext = '.txt'
+    if (contentType.includes('json')) ext = '.json'
+    else if (contentType.includes('xml')) ext = '.xml'
+    else if (contentType.includes('html')) ext = '.html'
+
+    const blob = new Blob([res.body], { type: contentType || 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `response${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const getStatusColor = (status: number) => {
@@ -81,7 +100,7 @@ export function ResponseViewer({ response, error, isLoading }: ResponseViewerPro
   return (
     <div className="h-full flex flex-col">
       {/* Response meta bar */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-sidebar">
+      <div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-sidebar overflow-visible">
         {/* Status */}
         <div
           className={clsx(
@@ -92,9 +111,14 @@ export function ResponseViewer({ response, error, isLoading }: ResponseViewerPro
           {response.status_code} {response.status_text}
         </div>
 
-        {/* Time */}
-        <div className="text-sm text-text-secondary">
-          <span className="text-text-primary">{formatTime(response.time)}</span>
+        {/* Time with timing tooltip */}
+        <div
+          className="relative text-sm text-text-secondary"
+          onMouseEnter={() => setShowTimings(true)}
+          onMouseLeave={() => setShowTimings(false)}
+        >
+          <span className="text-text-primary cursor-default">{formatTime(response.time)}</span>
+          {response.timings && showTimings && <TimingTooltip timings={response.timings} />}
         </div>
 
         {/* Size */}
@@ -103,6 +127,15 @@ export function ResponseViewer({ response, error, isLoading }: ResponseViewerPro
         </div>
 
         <div className="flex-1" />
+
+        {/* Save button */}
+        <button
+          onClick={() => handleSave(response)}
+          className="flex items-center gap-1 px-2 py-1 text-sm text-text-secondary hover:text-text-primary hover:bg-white/5 rounded transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          Save
+        </button>
 
         {/* Copy button */}
         <button
@@ -149,6 +182,49 @@ export function ResponseViewer({ response, error, isLoading }: ResponseViewerPro
         {activeTab === 'body' && <ResponseBody body={response.body} />}
         {activeTab === 'headers' && <ResponseHeaders headers={response.headers} />}
         {activeTab === 'cookies' && <ResponseCookies cookies={response.cookies} />}
+      </div>
+    </div>
+  )
+}
+
+function TimingTooltip({ timings }: { timings: TimingBreakdown }) {
+  const phases = [
+    { label: 'DNS Lookup', value: timings.dns_lookup, color: '#4CAF50' },
+    { label: 'TCP Handshake', value: timings.tcp_handshake, color: '#2196F3' },
+    { label: 'SSL Handshake', value: timings.ssl_handshake, color: '#9C27B0' },
+    { label: 'Waiting (TTFB)', value: timings.ttfb, color: '#FF9800' },
+    { label: 'Download', value: timings.download, color: '#00BCD4' },
+  ]
+
+  const maxValue = Math.max(...phases.map((p) => p.value), 1)
+
+  return (
+    <div className="absolute top-full left-0 mt-1 z-50">
+      <div className="bg-[#1e1e2e] border border-border rounded-lg shadow-xl p-3 min-w-[260px]">
+        <div className="text-xs font-semibold text-text-primary mb-2">Timing Breakdown</div>
+        <div className="space-y-1.5">
+          {phases.map((phase) => (
+            <div key={phase.label} className="flex items-center gap-2 text-xs">
+              <span className="w-[100px] text-text-secondary truncate">{phase.label}</span>
+              <div className="flex-1 h-3 bg-white/5 rounded overflow-hidden">
+                <div
+                  className="h-full rounded"
+                  style={{
+                    width: `${Math.max((phase.value / maxValue) * 100, 2)}%`,
+                    backgroundColor: phase.color,
+                  }}
+                />
+              </div>
+              <span className="w-[60px] text-right text-text-secondary tabular-nums">
+                {phase.value.toFixed(1)} ms
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 pt-2 border-t border-border flex justify-between text-xs">
+          <span className="text-text-secondary">Total</span>
+          <span className="text-text-primary font-medium">{timings.total.toFixed(1)} ms</span>
+        </div>
       </div>
     </div>
   )
