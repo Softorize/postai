@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'ai_app',
     'proxy_app',
     'sync_app',
+    'licensing_app',
 ]
 
 MIDDLEWARE = [
