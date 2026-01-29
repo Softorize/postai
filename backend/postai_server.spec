@@ -32,6 +32,7 @@ django_apps = [
     'mcp_app',
     'proxy_app',
     'sync_app',
+    'licensing_app',
     'postai',
 ]
 
