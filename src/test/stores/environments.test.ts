@@ -45,6 +45,7 @@ const createMockVariable = (overrides: Record<string, unknown> = {}) => ({
   description: '',
   is_secret: false,
   enabled: true,
+  order: 0,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
   ...overrides,

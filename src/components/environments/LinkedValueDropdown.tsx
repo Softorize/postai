@@ -52,6 +52,26 @@ export function LinkedValueDropdown({
 
       // Open upward if not enough space below but enough above
       setOpenUpward(spaceBelow < dropdownHeight && spaceAbove > spaceBelow)
+
+      // Calculate and set fixed position so dropdown isn't clipped by overflow parents
+      requestAnimationFrame(() => {
+        if (dropdownRef.current && containerRef.current) {
+          const r = containerRef.current.getBoundingClientRect()
+          const dd = dropdownRef.current
+          dd.style.position = 'fixed'
+          dd.style.left = `${r.left}px`
+          dd.style.minWidth = `${r.width}px`
+          if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+            dd.style.bottom = `${window.innerHeight - r.top}px`
+            dd.style.top = 'auto'
+            dd.style.maxHeight = `${Math.min(spaceAbove - 8, dropdownHeight)}px`
+          } else {
+            dd.style.top = `${r.bottom + 4}px`
+            dd.style.bottom = 'auto'
+            dd.style.maxHeight = `${Math.min(spaceBelow - 8, dropdownHeight)}px`
+          }
+        }
+      })
     }
     setIsOpen(!isOpen)
   }
@@ -110,7 +130,7 @@ export function LinkedValueDropdown({
   const currentLinkedInfo = getLinkedInfo(variable.selected_value_index)
 
   return (
-    <div ref={containerRef} className="relative flex-1">
+    <div ref={containerRef} className="relative flex-1 min-w-0">
       {/* Trigger button */}
       <button
         onClick={handleOpen}
@@ -121,12 +141,12 @@ export function LinkedValueDropdown({
           isOpen && 'border-primary-500'
         )}
       >
-        <div className="flex-1 truncate">
+        <div className="flex-1 min-w-0 truncate">
           <span className="font-mono">
             {variable.is_secret ? '••••••••' : (currentValue || '(empty)')}
           </span>
           {currentLinkedInfo && currentLinkedInfo.length > 0 && (
-            <span className="text-text-secondary ml-2 text-xs">
+            <span className="text-text-secondary ml-2 text-xs truncate">
               {currentLinkedInfo.map(l => `${l?.key}: ${l?.value}`).join(', ')}
             </span>
           )}
@@ -142,9 +162,8 @@ export function LinkedValueDropdown({
         <div
           ref={dropdownRef}
           className={clsx(
-            'absolute left-0 bg-sidebar border border-border rounded-lg shadow-xl z-50 max-h-80 flex flex-col',
-            'min-w-full w-max max-w-[400px]',
-            openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
+            'fixed bg-sidebar border border-border rounded-lg shadow-xl z-[9999] max-h-80 flex flex-col',
+            'w-max max-w-[400px]',
           )}
         >
           {/* Search input - only for non-secret variables */}

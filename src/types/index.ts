@@ -169,6 +169,7 @@ export interface EnvironmentVariable extends BaseModel {
   is_secret: boolean
   enabled: boolean
   link_group?: string | null  // Variables with same link_group sync their selected_value_index
+  order: number
 }
 
 // Request History
@@ -354,6 +355,15 @@ export interface AiMessage extends BaseModel {
   role: 'user' | 'assistant' | 'system'
   content: string
   tokens_used: number
+}
+
+// License types
+export interface LicenseStatus {
+  trial_started_at: string
+  days_remaining: number
+  is_trial: boolean
+  is_activated: boolean
+  is_expired: boolean
 }
 
 // Proxy types

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { Request, Workflow, Environment, HttpMethod, KeyValuePair, RequestBody, AuthConfig, Response } from '@/types'
 
-export type TabType = 'request' | 'workflow' | 'mcp' | 'ai' | 'environments' | 'environment'
+export type TabType = 'request' | 'workflow' | 'mcp' | 'ai' | 'environments' | 'environment' | 'link-groups'
 
 // MCP tab data
 export interface McpTabData {

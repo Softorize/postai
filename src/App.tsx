@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { AppLayout } from './components/layout/AppLayout'
 import { AiChatSidebar } from './components/ai/AiChatSidebar'
+import { LicenseGate } from './components/licensing/LicenseGate'
 import { useBackendStore } from './stores/backend.store'
+import { useLicenseStore } from './stores/license.store'
 import { Loader2 } from 'lucide-react'
 
 function App() {
   const { checkConnection } = useBackendStore()
+  const { status: licenseStatus, fetchStatus: fetchLicenseStatus } = useLicenseStore()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -26,6 +29,7 @@ function App() {
         while (attempts < maxAttempts) {
           const connected = await checkConnection()
           if (connected) {
+            await fetchLicenseStatus()
             setIsLoading(false)
             return
           }
@@ -44,7 +48,7 @@ function App() {
     }
 
     initApp()
-  }, [checkConnection])
+  }, [checkConnection, fetchLicenseStatus])
 
   if (isLoading) {
     return (
@@ -71,6 +75,10 @@ function App() {
         </div>
       </div>
     )
+  }
+
+  if (licenseStatus?.is_expired && !licenseStatus?.is_activated) {
+    return <LicenseGate />
   }
 
   return (

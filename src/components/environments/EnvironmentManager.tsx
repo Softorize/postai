@@ -9,9 +9,27 @@ import {
   EyeOff,
   Link,
   Unlink,
+  GripVertical,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useEnvironmentsStore } from '@/stores/environments.store'
+import { useTabsStore } from '@/stores/tabs.store'
 import { Environment, EnvironmentVariable } from '@/types'
 import { LinkedValueDropdown } from './LinkedValueDropdown'
 import toast from 'react-hot-toast'
@@ -33,7 +51,9 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
     deleteVariable,
     selectVariableValue,
     addVariableValue,
+    reorderVariables,
   } = useEnvironmentsStore()
+  const { openTab } = useTabsStore()
 
   // When showing a single environment, auto-expand it
   const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(
@@ -42,10 +62,35 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
   const [newVarKey, setNewVarKey] = useState('')
   const [newVarValue, setNewVarValue] = useState('')
   const [newVarDescription, setNewVarDescription] = useState('')
+  const [newVarLinkTo, setNewVarLinkTo] = useState<string | null>(null)
+  const [newVarLinkedValues, setNewVarLinkedValues] = useState<string[]>([])
   const [showNewEnvForm, setShowNewEnvForm] = useState(false)
   const [newEnvName, setNewEnvName] = useState('')
   const [addingValueTo, setAddingValueTo] = useState<{ envId: string; varId: string } | null>(null)
   const [newValueInput, setNewValueInput] = useState('')
+  const [addingLinkedValues, setAddingLinkedValues] = useState<Record<string, string>>({})
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const handleDragEnd = async (event: DragEndEvent, env: Environment) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const variables = env.variables || []
+    const oldIndex = variables.findIndex(v => v.id === active.id)
+    const newIndex = variables.findIndex(v => v.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = [...variables]
+    const [moved] = reordered.splice(oldIndex, 1)
+    reordered.splice(newIndex, 0, moved)
+    try {
+      await reorderVariables(env.id, reordered.map(v => v.id))
+    } catch {
+      toast.error('Failed to reorder variables')
+    }
+  }
 
   useEffect(() => {
     fetchEnvironments()
@@ -100,17 +145,42 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
     }
 
     try {
-      await createVariable(env.id, {
-        key: newVarKey.trim(),
-        values: [newVarValue],
-        selected_value_index: 0,
-        enabled: true,
-        is_secret: false,
-        description: newVarDescription.trim(),
-      })
+      if (newVarLinkTo) {
+        // Creating a linked variable: use multiple values and set link_group
+        const targetVar = (env.variables || []).find(v => v.id === newVarLinkTo)
+        if (!targetVar) {
+          toast.error('Target variable not found')
+          return
+        }
+        const linkGroup = targetVar.link_group || targetVar.key
+        // Ensure target has the link_group set
+        if (!targetVar.link_group) {
+          await updateVariable(env.id, targetVar.id, { link_group: linkGroup })
+        }
+        await createVariable(env.id, {
+          key: newVarKey.trim(),
+          values: newVarLinkedValues.length > 0 ? newVarLinkedValues : targetVar.values.map(() => ''),
+          selected_value_index: targetVar.selected_value_index,
+          enabled: true,
+          is_secret: false,
+          description: newVarDescription.trim(),
+          link_group: linkGroup,
+        })
+      } else {
+        await createVariable(env.id, {
+          key: newVarKey.trim(),
+          values: [newVarValue],
+          selected_value_index: 0,
+          enabled: true,
+          is_secret: false,
+          description: newVarDescription.trim(),
+        })
+      }
       setNewVarKey('')
       setNewVarValue('')
       setNewVarDescription('')
+      setNewVarLinkTo(null)
+      setNewVarLinkedValues([])
       toast.success('Variable added')
     } catch (err) {
       console.error('Failed to add variable:', err)
@@ -171,15 +241,37 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
   const handleStartAddValue = (env: Environment, variable: EnvironmentVariable) => {
     setAddingValueTo({ envId: env.id, varId: variable.id })
     setNewValueInput('')
+    // If variable is linked, initialize inputs for all linked vars
+    if (variable.link_group) {
+      const linkedVars = (env.variables || []).filter(v => v.link_group === variable.link_group)
+      const inputs: Record<string, string> = {}
+      linkedVars.forEach(v => { inputs[v.id] = '' })
+      setAddingLinkedValues(inputs)
+    } else {
+      setAddingLinkedValues({})
+    }
   }
 
   const handleConfirmAddValue = async () => {
-    if (!addingValueTo || !newValueInput.trim()) return
+    if (!addingValueTo) return
+    const env = environments.find(e => e.id === addingValueTo.envId)
+    const variable = env?.variables?.find(v => v.id === addingValueTo.varId)
+
     try {
-      await addVariableValue(addingValueTo.envId, addingValueTo.varId, newValueInput.trim())
-      toast.success('Value added')
+      if (variable?.link_group && Object.keys(addingLinkedValues).length > 0) {
+        // Add value to all linked variables
+        for (const [varId, value] of Object.entries(addingLinkedValues)) {
+          await addVariableValue(addingValueTo.envId, varId, value.trim() || '')
+        }
+        toast.success('Values added to all linked variables')
+      } else {
+        if (!newValueInput.trim()) return
+        await addVariableValue(addingValueTo.envId, addingValueTo.varId, newValueInput.trim())
+        toast.success('Value added')
+      }
       setAddingValueTo(null)
       setNewValueInput('')
+      setAddingLinkedValues({})
     } catch (err) {
       toast.error('Failed to add value')
     }
@@ -188,6 +280,7 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
   const handleCancelAddValue = () => {
     setAddingValueTo(null)
     setNewValueInput('')
+    setAddingLinkedValues({})
   }
 
   return (
@@ -224,6 +317,19 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
               >
                 <Trash2 className="w-4 h-4" />
               </button>
+              {(displayedEnvironments[0].variables || []).some(v => v.link_group) && (
+                <button
+                  onClick={() => openTab({
+                    type: 'link-groups',
+                    title: `Link Groups - ${displayedEnvironments[0].name}`,
+                    data: displayedEnvironments[0],
+                  })}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded ml-1"
+                >
+                  <Link className="w-3 h-3" />
+                  View Link Groups
+                </button>
+              )}
             </>
           )}
         </div>
@@ -344,7 +450,7 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
                   <div className={clsx(!environmentId && 'border-t border-border')}>
                     {/* Variables table header */}
                     <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-panel text-xs text-text-secondary uppercase">
-                      <div className="col-span-2">Variable</div>
+                      <div className="col-span-2 pl-6">Variable</div>
                       <div className="col-span-3">Value</div>
                       <div className="col-span-3">Description</div>
                       <div className="col-span-2">Type</div>
@@ -352,65 +458,163 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
                     </div>
 
                     {/* Variables */}
-                    {(env.variables || []).map((variable) => (
-                      <VariableRow
-                        key={variable.id}
-                        variable={variable}
-                        allVariables={env.variables || []}
-                        onUpdate={(updates) =>
-                          handleUpdateVariable(env, variable, updates)
-                        }
-                        onDelete={() => handleDeleteVariable(env, variable)}
-                        onAddValue={() => handleStartAddValue(env, variable)}
-                        onSelectValue={(index) => handleSelectValue(env, variable, index)}
-                        onLinkTo={(targetVar) => handleLinkVariables(env, variable, targetVar)}
-                        isAddingValue={addingValueTo?.varId === variable.id}
-                        newValueInput={newValueInput}
-                        onNewValueChange={setNewValueInput}
-                        onConfirmAddValue={handleConfirmAddValue}
-                        onCancelAddValue={handleCancelAddValue}
-                      />
-                    ))}
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={(event) => handleDragEnd(event, env)}
+                    >
+                      <SortableContext
+                        items={(env.variables || []).map(v => v.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {(env.variables || []).map((variable) => (
+                          <SortableVariableRow
+                            key={variable.id}
+                            variable={variable}
+                            allVariables={env.variables || []}
+                            onUpdate={(updates) =>
+                              handleUpdateVariable(env, variable, updates)
+                            }
+                            onDelete={() => handleDeleteVariable(env, variable)}
+                            onAddValue={() => handleStartAddValue(env, variable)}
+                            onSelectValue={(index) => handleSelectValue(env, variable, index)}
+                            onLinkTo={(targetVar) => handleLinkVariables(env, variable, targetVar)}
+                            isAddingValue={addingValueTo?.varId === variable.id}
+                            newValueInput={newValueInput}
+                            onNewValueChange={setNewValueInput}
+                            onConfirmAddValue={handleConfirmAddValue}
+                            onCancelAddValue={handleCancelAddValue}
+                            addingLinkedValues={addingLinkedValues}
+                            onLinkedValueChange={(varId, value) => setAddingLinkedValues(prev => ({ ...prev, [varId]: value }))}
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
 
                     {/* Add variable row */}
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 border-t border-border">
-                      <div className="col-span-2">
-                        <input
-                          type="text"
-                          value={newVarKey}
-                          onChange={(e) => setNewVarKey(e.target.value)}
-                          placeholder="Variable name"
-                          className="w-full px-2 py-1 text-sm bg-panel border border-border rounded focus:border-primary-500"
-                        />
+                    <div className="border-t border-border">
+                      <div className="grid grid-cols-12 gap-2 px-4 py-2">
+                        <div className="col-span-2">
+                          <input
+                            type="text"
+                            value={newVarKey}
+                            onChange={(e) => setNewVarKey(e.target.value)}
+                            placeholder="Variable name"
+                            className="w-full px-2 py-1 text-sm bg-panel border border-border rounded focus:border-primary-500"
+                          />
+                        </div>
+                        <div className="col-span-3">
+                          {newVarLinkTo ? (
+                            <span className="text-xs text-cyan-400">
+                              Linked — {(() => {
+                                const t = (env.variables || []).find(v => v.id === newVarLinkTo)
+                                return t ? `${t.values.length} values` : ''
+                              })()}
+                            </span>
+                          ) : (
+                            <input
+                              type="text"
+                              value={newVarValue}
+                              onChange={(e) => setNewVarValue(e.target.value)}
+                              placeholder="Initial value"
+                              className="w-full px-2 py-1 text-sm bg-panel border border-border rounded focus:border-primary-500"
+                            />
+                          )}
+                        </div>
+                        <div className="col-span-3 flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={newVarDescription}
+                            onChange={(e) => setNewVarDescription(e.target.value)}
+                            placeholder="Description (optional)"
+                            className="flex-1 px-2 py-1 text-sm bg-panel border border-border rounded focus:border-primary-500"
+                          />
+                          {/* Link-to dropdown for new variable */}
+                          {(() => {
+                            const linkableVars = (env.variables || []).filter(v => v.values.length > 1)
+                            if (linkableVars.length === 0) return null
+                            return (
+                              <div className="relative">
+                                <button
+                                  onClick={() => {
+                                    if (newVarLinkTo) {
+                                      setNewVarLinkTo(null)
+                                      setNewVarLinkedValues([])
+                                    }
+                                  }}
+                                  className={clsx(
+                                    'p-1 rounded transition-colors',
+                                    newVarLinkTo
+                                      ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
+                                      : 'hover:bg-white/10 text-text-secondary hover:text-primary-400'
+                                  )}
+                                  title={newVarLinkTo ? 'Click to unlink' : 'Link to existing variable'}
+                                >
+                                  {newVarLinkTo ? <Link className="w-4 h-4" /> : <Unlink className="w-4 h-4" />}
+                                </button>
+                                {!newVarLinkTo && (
+                                  <select
+                                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                                    value=""
+                                    onChange={(e) => {
+                                      const targetId = e.target.value
+                                      if (!targetId) return
+                                      const target = (env.variables || []).find(v => v.id === targetId)
+                                      if (target) {
+                                        setNewVarLinkTo(targetId)
+                                        setNewVarLinkedValues(target.values.map(() => ''))
+                                      }
+                                    }}
+                                  >
+                                    <option value="">Link to...</option>
+                                    {linkableVars.map(v => (
+                                      <option key={v.id} value={v.id}>{v.key} ({v.values.length} values)</option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
+                            )
+                          })()}
+                        </div>
+                        <div className="col-span-2"></div>
+                        <div className="col-span-2 text-right">
+                          <button
+                            onClick={() => handleAddVariable(env)}
+                            disabled={!newVarKey.trim()}
+                            className="px-2 py-1 text-xs bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                          >
+                            Add
+                          </button>
+                        </div>
                       </div>
-                      <div className="col-span-3">
-                        <input
-                          type="text"
-                          value={newVarValue}
-                          onChange={(e) => setNewVarValue(e.target.value)}
-                          placeholder="Initial value"
-                          className="w-full px-2 py-1 text-sm bg-panel border border-border rounded focus:border-primary-500"
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <input
-                          type="text"
-                          value={newVarDescription}
-                          onChange={(e) => setNewVarDescription(e.target.value)}
-                          placeholder="Description (optional)"
-                          className="w-full px-2 py-1 text-sm bg-panel border border-border rounded focus:border-primary-500"
-                        />
-                      </div>
-                      <div className="col-span-2"></div>
-                      <div className="col-span-2 text-right">
-                        <button
-                          onClick={() => handleAddVariable(env)}
-                          disabled={!newVarKey.trim()}
-                          className="px-2 py-1 text-xs bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded"
-                        >
-                          Add
-                        </button>
-                      </div>
+                      {/* Multi-value inputs when linking */}
+                      {newVarLinkTo && (() => {
+                        const target = (env.variables || []).find(v => v.id === newVarLinkTo)
+                        if (!target) return null
+                        return (
+                          <div className="px-4 py-2 bg-cyan-500/5 border-t border-cyan-500/20 space-y-1">
+                            <div className="text-xs text-text-secondary mb-1">Values (matching {target.key}):</div>
+                            {target.values.map((tv, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <span className="text-xs text-text-secondary w-24 truncate" title={tv}>
+                                  Value {i + 1} ({tv})
+                                </span>
+                                <input
+                                  type="text"
+                                  value={newVarLinkedValues[i] || ''}
+                                  onChange={(e) => {
+                                    const updated = [...newVarLinkedValues]
+                                    updated[i] = e.target.value
+                                    setNewVarLinkedValues(updated)
+                                  }}
+                                  placeholder={`Value for "${tv}"`}
+                                  className="flex-1 px-2 py-1 text-sm bg-panel border border-border rounded font-mono focus:border-primary-500"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                 )}
@@ -420,6 +624,32 @@ export function EnvironmentManager({ environmentId }: EnvironmentManagerProps) {
         )}
       </div>
     </div>
+  )
+}
+
+function SortableVariableRow(props: React.ComponentProps<typeof VariableRow>) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.variable.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  }
+
+  return (
+    <VariableRow
+      {...props}
+      sortableRef={setNodeRef}
+      sortableStyle={style}
+      dragHandleProps={{ ...attributes, ...listeners }}
+    />
   )
 }
 
@@ -436,6 +666,11 @@ function VariableRow({
   onNewValueChange,
   onConfirmAddValue,
   onCancelAddValue,
+  addingLinkedValues,
+  onLinkedValueChange,
+  sortableRef,
+  sortableStyle,
+  dragHandleProps,
 }: {
   variable: EnvironmentVariable
   allVariables: EnvironmentVariable[]
@@ -449,6 +684,11 @@ function VariableRow({
   onNewValueChange?: (value: string) => void
   onConfirmAddValue?: () => void
   onCancelAddValue?: () => void
+  addingLinkedValues?: Record<string, string>
+  onLinkedValueChange?: (varId: string, value: string) => void
+  sortableRef?: (node: HTMLElement | null) => void
+  sortableStyle?: React.CSSProperties
+  dragHandleProps?: Record<string, unknown>
 }) {
   const [showSecret, setShowSecret] = useState(false)
   const [showLinkMenu, setShowLinkMenu] = useState(false)
@@ -465,6 +705,14 @@ function VariableRow({
     ? allVariables.filter(v => v.link_group === variable.link_group && v.id !== variable.id)
     : []
 
+  // Compute group letter (A, B, C...) from unique link_groups
+  const groupLetter = (() => {
+    if (!variable.link_group) return null
+    const uniqueGroups = [...new Set(allVariables.filter(v => v.link_group).map(v => v.link_group))].sort()
+    const index = uniqueGroups.indexOf(variable.link_group)
+    return index >= 0 ? String.fromCharCode(65 + index) : null
+  })()
+
   const handleLinkToVar = (targetVar: EnvironmentVariable) => {
     onLinkTo(targetVar)
     setShowLinkMenu(false)
@@ -476,9 +724,15 @@ function VariableRow({
   }
 
   return (
-    <>
+    <div ref={sortableRef} style={sortableStyle}>
       <div className="grid grid-cols-12 gap-2 px-4 py-2 border-t border-border hover:bg-white/5 group">
         <div className="col-span-2 flex items-center">
+          <button
+            className="cursor-grab active:cursor-grabbing p-0.5 mr-1 text-text-secondary hover:text-text-primary opacity-0 group-hover:opacity-100 flex-shrink-0"
+            {...dragHandleProps}
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
           <input
             type="checkbox"
             checked={variable.enabled}
@@ -553,7 +807,7 @@ function VariableRow({
               <button
                 onClick={() => setShowLinkMenu(!showLinkMenu)}
                 className={clsx(
-                  'p-1 rounded transition-colors',
+                  'p-1 rounded transition-colors flex items-center gap-1',
                   variable.link_group
                     ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
                     : 'hover:bg-white/10 text-text-secondary hover:text-primary-400'
@@ -561,7 +815,12 @@ function VariableRow({
                 title={variable.link_group ? `Linked to: ${linkedVariables.map(v => v.key).join(', ')}` : 'Link to another variable'}
               >
                 {variable.link_group ? (
-                  <Link className="w-4 h-4" />
+                  <>
+                    <Link className="w-4 h-4" />
+                    {groupLetter && (
+                      <span className="text-[10px] font-bold leading-none">{groupLetter}</span>
+                    )}
+                  </>
                 ) : (
                   <Unlink className="w-4 h-4" />
                 )}
@@ -627,40 +886,83 @@ function VariableRow({
       </div>
       {/* Inline add value row */}
       {isAddingValue && (
-        <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-primary-500/10 border-t border-primary-500/30">
-          <div className="col-span-2 flex items-center">
-            <span className="text-xs text-text-secondary">New value for {variable.key}:</span>
-          </div>
-          <div className="col-span-6 flex items-center gap-2">
-            <input
-              type="text"
-              value={newValueInput || ''}
-              onChange={(e) => onNewValueChange?.(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onConfirmAddValue?.()
-                if (e.key === 'Escape') onCancelAddValue?.()
-              }}
-              placeholder="Enter new value..."
-              autoFocus
-              className="flex-1 px-2 py-1 text-sm bg-panel border border-primary-500 rounded font-mono"
-            />
-            <button
-              onClick={onConfirmAddValue}
-              disabled={!newValueInput?.trim()}
-              className="px-2 py-1 text-xs bg-primary-600 hover:bg-primary-700 disabled:opacity-50 rounded"
-            >
-              Add
-            </button>
-            <button
-              onClick={onCancelAddValue}
-              className="px-2 py-1 text-xs bg-panel hover:bg-white/10 rounded"
-            >
-              Cancel
-            </button>
-          </div>
-          <div className="col-span-4"></div>
+        <div className="px-4 py-2 bg-primary-500/10 border-t border-primary-500/30">
+          {variable.link_group && addingLinkedValues && Object.keys(addingLinkedValues).length > 0 ? (
+            // Linked: show inputs for all linked variables
+            <div className="space-y-2">
+              <div className="text-xs text-text-secondary">Add values to all linked variables:</div>
+              {allVariables
+                .filter(v => v.link_group === variable.link_group)
+                .map(v => (
+                  <div key={v.id} className="flex items-center gap-2">
+                    <span className="text-xs text-text-secondary w-32 truncate font-mono">{v.key}:</span>
+                    <input
+                      type="text"
+                      value={addingLinkedValues[v.id] || ''}
+                      onChange={(e) => onLinkedValueChange?.(v.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') onConfirmAddValue?.()
+                        if (e.key === 'Escape') onCancelAddValue?.()
+                      }}
+                      placeholder={`New value for ${v.key}...`}
+                      autoFocus={v.id === variable.id}
+                      className="flex-1 px-2 py-1 text-sm bg-panel border border-primary-500 rounded font-mono"
+                    />
+                  </div>
+                ))}
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  onClick={onConfirmAddValue}
+                  className="px-2 py-1 text-xs bg-primary-600 hover:bg-primary-700 rounded"
+                >
+                  Add All
+                </button>
+                <button
+                  onClick={onCancelAddValue}
+                  className="px-2 py-1 text-xs bg-panel hover:bg-white/10 rounded"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Single variable: original single input
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-2 flex items-center">
+                <span className="text-xs text-text-secondary">New value for {variable.key}:</span>
+              </div>
+              <div className="col-span-6 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newValueInput || ''}
+                  onChange={(e) => onNewValueChange?.(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onConfirmAddValue?.()
+                    if (e.key === 'Escape') onCancelAddValue?.()
+                  }}
+                  placeholder="Enter new value..."
+                  autoFocus
+                  className="flex-1 px-2 py-1 text-sm bg-panel border border-primary-500 rounded font-mono"
+                />
+                <button
+                  onClick={onConfirmAddValue}
+                  disabled={!newValueInput?.trim()}
+                  className="px-2 py-1 text-xs bg-primary-600 hover:bg-primary-700 disabled:opacity-50 rounded"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={onCancelAddValue}
+                  className="px-2 py-1 text-xs bg-panel hover:bg-white/10 rounded"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="col-span-4"></div>
+            </div>
+          )}
         </div>
       )}
-    </>
+    </div>
   )
 }

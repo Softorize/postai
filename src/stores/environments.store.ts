@@ -40,6 +40,7 @@ interface EnvironmentsState {
   selectVariableValue: (envId: string, varId: string, index: number) => Promise<void>
   addVariableValue: (envId: string, varId: string, value: string) => Promise<void>
   removeVariableValue: (envId: string, varId: string, index: number) => Promise<void>
+  reorderVariables: (envId: string, variableIds: string[]) => Promise<void>
 
   // Computed
   getGlobalEnvironments: () => Environment[]
@@ -220,6 +221,11 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
 
   removeVariableValue: async (envId, varId, index) => {
     await api.post(`/environments/${envId}/variables/${varId}/remove-value/`, { index })
+    await get().fetchEnvironments()
+  },
+
+  reorderVariables: async (envId, variableIds) => {
+    await api.post(`/environments/${envId}/variables/reorder/`, { variable_ids: variableIds })
     await get().fetchEnvironments()
   },
 
