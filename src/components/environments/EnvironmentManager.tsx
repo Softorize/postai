@@ -465,6 +465,14 @@ function VariableRow({
     ? allVariables.filter(v => v.link_group === variable.link_group && v.id !== variable.id)
     : []
 
+  // Compute group letter (A, B, C...) from unique link_groups
+  const groupLetter = (() => {
+    if (!variable.link_group) return null
+    const uniqueGroups = [...new Set(allVariables.filter(v => v.link_group).map(v => v.link_group))].sort()
+    const index = uniqueGroups.indexOf(variable.link_group)
+    return index >= 0 ? String.fromCharCode(65 + index) : null
+  })()
+
   const handleLinkToVar = (targetVar: EnvironmentVariable) => {
     onLinkTo(targetVar)
     setShowLinkMenu(false)
@@ -553,7 +561,7 @@ function VariableRow({
               <button
                 onClick={() => setShowLinkMenu(!showLinkMenu)}
                 className={clsx(
-                  'p-1 rounded transition-colors',
+                  'p-1 rounded transition-colors flex items-center gap-1',
                   variable.link_group
                     ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
                     : 'hover:bg-white/10 text-text-secondary hover:text-primary-400'
@@ -561,7 +569,12 @@ function VariableRow({
                 title={variable.link_group ? `Linked to: ${linkedVariables.map(v => v.key).join(', ')}` : 'Link to another variable'}
               >
                 {variable.link_group ? (
-                  <Link className="w-4 h-4" />
+                  <>
+                    <Link className="w-4 h-4" />
+                    {groupLetter && (
+                      <span className="text-[10px] font-bold leading-none">{groupLetter}</span>
+                    )}
+                  </>
                 ) : (
                   <Unlink className="w-4 h-4" />
                 )}
