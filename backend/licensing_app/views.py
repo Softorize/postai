@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 
 from .models import License
 from .serializers import LicenseActivateSerializer
-from .services import validate_license_key
+from .services import validate_license_key, verify_license
 
 TRIAL_DAYS = 30
 
@@ -13,6 +13,18 @@ TRIAL_DAYS = 30
 class LicenseStatusView(APIView):
     def get(self, request):
         instance = License.get_instance()
+
+        # If signature verification fails, the DB was tampered with
+        if not verify_license(instance):
+            return Response({
+                'trial_started_at': instance.trial_started_at,
+                'days_remaining': 0,
+                'is_trial': False,
+                'is_activated': False,
+                'is_expired': True,
+                'tampered': True,
+            })
+
         is_activated = bool(instance.license_key)
 
         if is_activated:

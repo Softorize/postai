@@ -65,3 +65,36 @@ class LicenseAPITest(TestCase):
     def test_activate_invalid_key(self):
         resp = self.client.post('/api/v1/license/activate/', {'license_key': 'POSTAI-AAAAA-BBBBB-CCCCC-DDDDD'}, format='json')
         self.assertEqual(resp.status_code, 400)
+
+    def test_tampered_trial_start(self):
+        """Direct DB edit to trial_started_at should be detected as tampering."""
+        instance = License.get_instance()
+        # Tamper directly in DB without going through model.save()
+        License.objects.filter(pk=instance.pk).update(
+            trial_started_at=timezone.now() + timedelta(days=365)
+        )
+
+        resp = self.client.get('/api/v1/license/status/')
+        data = resp.json()
+        self.assertTrue(data['is_expired'])
+        self.assertTrue(data.get('tampered', False))
+
+    def test_tampered_license_key(self):
+        """Direct DB edit to license_key should be detected as tampering."""
+        instance = License.get_instance()
+        License.objects.filter(pk=instance.pk).update(license_key='POSTAI-FAKE0-FAKE0-FAKE0-FAKE0')
+
+        resp = self.client.get('/api/v1/license/status/')
+        data = resp.json()
+        self.assertTrue(data['is_expired'])
+        self.assertTrue(data.get('tampered', False))
+
+    def test_tampered_signature_cleared(self):
+        """Clearing the row_signature should be detected."""
+        instance = License.get_instance()
+        License.objects.filter(pk=instance.pk).update(row_signature='')
+
+        resp = self.client.get('/api/v1/license/status/')
+        data = resp.json()
+        self.assertTrue(data['is_expired'])
+        self.assertTrue(data.get('tampered', False))
