@@ -3,6 +3,13 @@ import { Workspace } from '@/types'
 import { api } from '@/api/client'
 import { useTabsStore } from './tabs.store'
 
+export interface ExportOptions {
+  collections?: boolean
+  environments?: boolean
+  mcp_servers?: boolean
+  workflows?: boolean
+}
+
 interface WorkspacesState {
   workspaces: Workspace[]
   activeWorkspace: Workspace | null
@@ -16,6 +23,8 @@ interface WorkspacesState {
   deleteWorkspace: (id: string) => Promise<void>
   activateWorkspace: (id: string) => Promise<void>
   getActiveWorkspace: () => Promise<Workspace | null>
+  exportWorkspace: (id: string, options?: ExportOptions) => Promise<void>
+  importWorkspace: (content: string) => Promise<Workspace>
 }
 
 export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
@@ -83,5 +92,36 @@ export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
     } catch {
       return null
     }
+  },
+
+  exportWorkspace: async (id, options) => {
+    const params = new URLSearchParams()
+    if (options) {
+      if (options.collections === false) params.set('collections', 'false')
+      if (options.environments === false) params.set('environments', 'false')
+      if (options.mcp_servers === false) params.set('mcp_servers', 'false')
+      if (options.workflows === false) params.set('workflows', 'false')
+    }
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    const response = await api.get(`/workspaces/${id}/export/${qs}`)
+    const blob = new Blob([JSON.stringify(response.data, null, 2)], {
+      type: 'application/json',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${response.data.workspace?.name || 'workspace'}.postai-workspace.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  },
+
+  importWorkspace: async (content) => {
+    const response = await api.post('/workspaces/import/', { content })
+    const workspace = response.data.workspace
+    await get().fetchWorkspaces()
+    await get().activateWorkspace(workspace.id)
+    return workspace
   },
 }))

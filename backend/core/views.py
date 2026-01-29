@@ -1,10 +1,12 @@
 """Core views including health check."""
+import json
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from .models import Workspace
 from .serializers import WorkspaceSerializer, WorkspaceCreateSerializer
+from .services.workspace_export import WorkspaceExportService, WorkspaceImportService
 
 
 class HealthCheckView(APIView):
@@ -53,3 +55,67 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
         if not workspace:
             workspace = Workspace.get_or_create_default()
         return Response(WorkspaceSerializer(workspace).data)
+
+    @action(detail=True, methods=['get'])
+    def export(self, request, pk=None):
+        """Export entire workspace as JSON."""
+        workspace = self.get_object()
+        service = WorkspaceExportService(
+            workspace,
+            include_collections=request.query_params.get('collections', 'true') == 'true',
+            include_environments=request.query_params.get('environments', 'true') == 'true',
+            include_mcp_servers=request.query_params.get('mcp_servers', 'true') == 'true',
+            include_workflows=request.query_params.get('workflows', 'true') == 'true',
+        )
+        return Response(service.export())
+
+    @action(detail=False, methods=['post'], url_path='import')
+    def import_workspace(self, request):
+        """Import a workspace from exported JSON.
+
+        POST body: { "content": "<json_string>" } or { "content": {<json_object>} }
+        """
+        content = request.data.get('content')
+        if not content:
+            file = request.FILES.get('file')
+            if file:
+                content = file.read().decode('utf-8')
+
+        if not content:
+            return Response(
+                {'error': 'No workspace data provided'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if isinstance(content, str):
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                return Response(
+                    {'error': 'Invalid JSON'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            data = content
+
+        try:
+            service = WorkspaceImportService(data)
+            workspace = service.execute()
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Import failed: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                'success': True,
+                'workspace': WorkspaceSerializer(workspace).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
