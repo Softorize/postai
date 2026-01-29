@@ -8,6 +8,7 @@ import { WelcomeScreen } from './WelcomeScreen'
 import { EnvironmentManager } from '../environments/EnvironmentManager'
 import { McpManager } from '../mcp/McpManager'
 import { WorkflowBuilder } from '../workflow/WorkflowBuilder'
+import { LinkGroupsViewer } from '../environments/LinkGroupsViewer'
 import { Request } from '@/types'
 
 export function MainContent() {
@@ -73,6 +74,7 @@ export function MainContent() {
               const hasCollection = tab.type === 'request' && tab.data && (tab.data as Request).collection
               const isHistoryTab = tab.type === 'request' && tab.historicalResponse
               const isEnvironmentTab = tab.type === 'environment' || tab.type === 'environments'
+              const isLinkGroupsTab = tab.type === 'link-groups'
               const isWorkflowTab = tab.type === 'workflow'
               const isMcpTab = tab.type === 'mcp'
 
@@ -94,6 +96,11 @@ export function MainContent() {
                     : 'bg-purple-500/10 text-text-secondary hover:text-text-primary hover:bg-purple-500/15 border border-purple-500/20'
                 }
                 if (isMcpTab) {
+                  return isActive
+                    ? 'bg-cyan-500/20 text-text-primary shadow-sm border border-cyan-500/30'
+                    : 'bg-cyan-500/10 text-text-secondary hover:text-text-primary hover:bg-cyan-500/15 border border-cyan-500/20'
+                }
+                if (isLinkGroupsTab) {
                   return isActive
                     ? 'bg-cyan-500/20 text-text-primary shadow-sm border border-cyan-500/30'
                     : 'bg-cyan-500/10 text-text-secondary hover:text-text-primary hover:bg-cyan-500/15 border border-cyan-500/20'
@@ -192,6 +199,9 @@ export function MainContent() {
             )}
             {activeTab.type === 'environment' && (
               <EnvironmentManager environmentId={(activeTab.data as { id: string })?.id} />
+            )}
+            {activeTab.type === 'link-groups' && (
+              <LinkGroupsViewer environmentId={(activeTab.data as { id: string })?.id} />
             )}
             {activeTab.type === 'ai' && (
               <div className="p-4 text-text-secondary">

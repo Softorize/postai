@@ -282,3 +282,20 @@ class EnvironmentVariableViewSet(viewsets.ModelViewSet):
 
         variable.remove_value(index)
         return Response(EnvironmentVariableSerializer(variable).data)
+
+    @action(detail=False, methods=['post'], url_path='reorder')
+    def reorder(self, request, environment_pk=None):
+        """Reorder variables by updating their order field."""
+        variable_ids = request.data.get('variable_ids', [])
+        if not variable_ids:
+            return Response(
+                {'error': 'variable_ids is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        for index, var_id in enumerate(variable_ids):
+            EnvironmentVariable.objects.filter(
+                id=var_id, environment_id=environment_pk
+            ).update(order=index)
+
+        return Response({'status': 'ok'})

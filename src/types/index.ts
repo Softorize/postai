@@ -169,6 +169,7 @@ export interface EnvironmentVariable extends BaseModel {
   is_secret: boolean
   enabled: boolean
   link_group?: string | null  // Variables with same link_group sync their selected_value_index
+  order: number
 }
 
 // Request History

@@ -74,13 +74,22 @@ class EnvironmentVariable(BaseModel):
     enabled = models.BooleanField(default=True)
     # Link group: variables with same link_group sync their selected_value_index
     link_group = models.CharField(max_length=255, blank=True, null=True)
+    order = models.IntegerField(default=0)
 
     class Meta:
-        ordering = ['key']
+        ordering = ['order', 'id']
         unique_together = ['environment', 'key']
 
     def __str__(self):
         return f"{self.environment.name}.{self.key}"
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.order == 0:
+            max_order = EnvironmentVariable.objects.filter(
+                environment=self.environment
+            ).order_by('-order').values_list('order', flat=True).first()
+            self.order = (max_order or 0) + 1
+        super().save(*args, **kwargs)
 
     @property
     def current_value(self):
