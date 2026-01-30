@@ -3,7 +3,6 @@ import { clsx } from 'clsx'
 import {
   Terminal,
   ChevronDown,
-  ChevronUp,
   Trash2,
   X,
   ChevronRight,
@@ -234,21 +233,7 @@ export function ConsolePanel() {
   }, [entries, searchQuery])
 
   if (!isVisible) {
-    return (
-      <button
-        onClick={toggleVisibility}
-        className="fixed bottom-4 right-4 flex items-center gap-2 px-3 py-2 bg-sidebar border border-border rounded-lg shadow-lg text-sm hover:bg-white/5 transition-colors z-50"
-      >
-        <Terminal className="w-4 h-4 text-primary-400" />
-        Console
-        {entries.length > 0 && (
-          <span className="px-1.5 py-0.5 bg-primary-500/20 text-primary-400 rounded text-xs">
-            {entries.length}
-          </span>
-        )}
-        <ChevronUp className="w-4 h-4" />
-      </button>
-    )
+    return null
   }
 
   const getStatusColor = (status?: number) => {

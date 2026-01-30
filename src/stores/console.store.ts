@@ -38,7 +38,7 @@ interface ConsoleState {
 
 export const useConsoleStore = create<ConsoleState>((set) => ({
   entries: [],
-  isVisible: true,
+  isVisible: false,
   maxEntries: 100,
   searchQuery: '',
 

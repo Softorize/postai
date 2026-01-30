@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   PanelResizeHandle,
   Panel,
   PanelGroup,
+  type ImperativePanelHandle,
 } from 'react-resizable-panels'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
@@ -13,8 +14,24 @@ import { useWorkspacesStore } from '@/stores/workspaces.store'
 import { useCollectionsStore } from '@/stores/collections.store'
 import { useEnvironmentsStore } from '@/stores/environments.store'
 import { useWorkflowsStore } from '@/stores/workflows.store'
+import { useConsoleStore } from '@/stores/console.store'
 
 export function AppLayout() {
+  const isConsoleVisible = useConsoleStore(s => s.isVisible)
+  const consolePanelRef = useRef<ImperativePanelHandle>(null)
+  const prevVisibleRef = useRef(isConsoleVisible)
+
+  useEffect(() => {
+    if (isConsoleVisible !== prevVisibleRef.current) {
+      prevVisibleRef.current = isConsoleVisible
+      if (isConsoleVisible) {
+        consolePanelRef.current?.resize(30)
+      } else {
+        consolePanelRef.current?.collapse()
+      }
+    }
+  }, [isConsoleVisible])
+
   const { fetchWorkspaces, activeWorkspace } = useWorkspacesStore()
   const { fetchCollections } = useCollectionsStore()
   const { fetchEnvironments } = useEnvironmentsStore()
@@ -51,14 +68,21 @@ export function AppLayout() {
           <Panel defaultSize={80}>
             <PanelGroup direction="vertical">
               {/* Main content */}
-              <Panel defaultSize={70} minSize={30}>
+              <Panel defaultSize={isConsoleVisible ? 70 : 100} minSize={30}>
                 <MainContent />
               </Panel>
 
-              <PanelResizeHandle className="h-1 bg-border hover:bg-primary-500 transition-colors cursor-row-resize" />
+              <PanelResizeHandle className={`h-1 bg-border hover:bg-primary-500 transition-colors cursor-row-resize ${!isConsoleVisible ? 'hidden' : ''}`} />
 
               {/* Console panel */}
-              <Panel defaultSize={30} minSize={10} maxSize={70}>
+              <Panel
+                ref={consolePanelRef}
+                defaultSize={isConsoleVisible ? 30 : 0}
+                minSize={0}
+                maxSize={70}
+                collapsible
+                collapsedSize={0}
+              >
                 <ConsolePanel />
               </Panel>
             </PanelGroup>
