@@ -1,9 +1,59 @@
 """Request execution service for PostAI."""
+import ssl
 import socket
 import time
 import httpx
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse
+
+
+def _get_system_ssl_context() -> ssl.SSLContext:
+    """Create SSL context using the system certificate store (macOS Keychain).
+
+    This ensures VPN CA certificates and corporate certs are trusted,
+    unlike certifi's bundle which only has public CAs.
+    """
+    import sys
+    import subprocess
+    import tempfile
+    import os
+
+    ctx = ssl.create_default_context()
+
+    # On macOS in PyInstaller bundles, ssl may not find system certs automatically.
+    # Export certs from the macOS Keychain and load them explicitly.
+    if sys.platform == 'darwin':
+        try:
+            # Export all trusted certs from macOS system keychain
+            result = subprocess.run(
+                ['/usr/bin/security', 'find-certificate', '-a', '-p',
+                 '/System/Library/Keychains/SystemRootCertificates.keychain'],
+                capture_output=True, text=True, timeout=5
+            )
+            system_certs = result.stdout
+
+            # Also get user keychain certs (includes VPN certs)
+            result2 = subprocess.run(
+                ['/usr/bin/security', 'find-certificate', '-a', '-p'],
+                capture_output=True, text=True, timeout=5
+            )
+            user_certs = result2.stdout
+
+            if system_certs or user_certs:
+                combined = (system_certs or '') + '\n' + (user_certs or '')
+                # Write to temp file and load
+                fd, cert_path = tempfile.mkstemp(suffix='.pem')
+                try:
+                    os.write(fd, combined.encode())
+                    os.close(fd)
+                    ctx.load_verify_locations(cert_path)
+                finally:
+                    os.unlink(cert_path)
+        except Exception:
+            # Fall back to default context if keychain export fails
+            pass
+
+    return ctx
 
 
 def execute_request_sync(
@@ -46,11 +96,12 @@ def execute_request_sync(
     except socket.gaierror:
         timings['dns_lookup'] = 0
 
-    # Configure client
+    # Configure client - use system SSL context for VPN/corporate cert support
     client_kwargs: Dict[str, Any] = {
         'timeout': timeout,
         'follow_redirects': True,
         'trust_env': True,
+        'verify': _get_system_ssl_context(),
     }
 
     if proxy:
