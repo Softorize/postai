@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from urllib.parse import urlparse
 
 
-async def execute_request(
+def execute_request_sync(
     method: str,
     url: str,
     headers: Optional[Dict[str, str]] = None,
@@ -15,6 +15,9 @@ async def execute_request(
     proxy: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute an HTTP request and return the response.
+
+    Uses synchronous httpx.Client which properly respects system network
+    configuration including VPN routing and DNS.
 
     Args:
         method: HTTP method (GET, POST, PUT, etc.)
@@ -44,18 +47,19 @@ async def execute_request(
         timings['dns_lookup'] = 0
 
     # Configure client
-    client_kwargs = {
+    client_kwargs: Dict[str, Any] = {
         'timeout': timeout,
         'follow_redirects': True,
+        'trust_env': True,
     }
 
     if proxy:
         client_kwargs['proxy'] = proxy
 
     try:
-        async with httpx.AsyncClient(**client_kwargs) as client:
+        with httpx.Client(**client_kwargs) as client:
             # Prepare request kwargs
-            request_kwargs = {
+            request_kwargs: Dict[str, Any] = {
                 'method': method,
                 'url': url,
             }
@@ -64,25 +68,18 @@ async def execute_request(
                 request_kwargs['headers'] = headers
 
             if body and method in ('POST', 'PUT', 'PATCH'):
-                # Check if it's JSON
-                if headers and headers.get('Content-Type', '').startswith('application/json'):
-                    request_kwargs['content'] = body
-                else:
-                    request_kwargs['content'] = body
+                request_kwargs['content'] = body
 
             # Execute request with timing
             request_start = time.perf_counter()
-            response = await client.request(**request_kwargs)
+            response = client.request(**request_kwargs)
             request_total = (time.perf_counter() - request_start) * 1000
 
             # response.elapsed is the time from sending to receiving the first byte
             server_elapsed_ms = response.elapsed.total_seconds() * 1000
 
             # Estimate connection overhead (TCP + SSL) from difference
-            connection_overhead = max(0, server_elapsed_ms - timings.get('dns_lookup', 0))
             if is_https:
-                # Roughly split: TCP ~40%, SSL ~60% of connection overhead
-                # but cap connection overhead to a reasonable portion of TTFB
                 overhead_estimate = max(0, server_elapsed_ms * 0.3)
                 timings['tcp_handshake'] = round(overhead_estimate * 0.4, 2)
                 timings['ssl_handshake'] = round(overhead_estimate * 0.6, 2)
@@ -154,3 +151,23 @@ async def execute_request(
             'time': elapsed_time,
             'error': str(e),
         }
+
+
+# Keep async wrapper for backward compatibility with views
+async def execute_request(
+    method: str,
+    url: str,
+    headers: Optional[Dict[str, str]] = None,
+    body: Optional[str] = None,
+    timeout: int = 30,
+    proxy: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Async wrapper around sync execute_request_sync."""
+    return execute_request_sync(
+        method=method,
+        url=url,
+        headers=headers,
+        body=body,
+        timeout=timeout,
+        proxy=proxy,
+    )

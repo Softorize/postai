@@ -10,7 +10,7 @@ import httpx
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .services import execute_request
+from .services import execute_request_sync
 from .models import RequestHistory
 from core.models import Workspace
 
@@ -40,22 +40,15 @@ class ExecuteRequestView(APIView):
         if hmac_auth:
             headers = self._apply_hmac_auth(method, url, headers, body, hmac_auth)
 
-        # Execute request asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(
-                execute_request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                    body=body,
-                    timeout=timeout,
-                    proxy=proxy,
-                )
-            )
-        finally:
-            loop.close()
+        # Execute request synchronously (sync httpx properly respects VPN/system network)
+        result = execute_request_sync(
+            method=method,
+            url=url,
+            headers=headers,
+            body=body,
+            timeout=timeout,
+            proxy=proxy,
+        )
 
         # Save to history if requested
         if save_history:
