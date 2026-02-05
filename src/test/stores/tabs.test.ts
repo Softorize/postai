@@ -94,7 +94,7 @@ describe('Tabs Store', () => {
     it('should select next tab when closing active tab', () => {
       const id1 = useTabsStore.getState().openTab({ type: 'request', title: 'Tab 1', data: null })
       const id2 = useTabsStore.getState().openTab({ type: 'request', title: 'Tab 2', data: null })
-      const id3 = useTabsStore.getState().openTab({ type: 'request', title: 'Tab 3', data: null })
+      useTabsStore.getState().openTab({ type: 'request', title: 'Tab 3', data: null })
 
       // Set active to first tab
       useTabsStore.getState().setActiveTab(id1)
@@ -220,7 +220,7 @@ describe('Tabs Store', () => {
       expect(useTabsStore.getState().currentWorkspaceId).toBe('workspace-1')
 
       // Open a tab in workspace-1
-      const id2 = useTabsStore.getState().openTab({ type: 'request', title: 'WS1 Tab', data: null })
+      useTabsStore.getState().openTab({ type: 'request', title: 'WS1 Tab', data: null })
 
       // Switch back to default
       useTabsStore.getState().switchWorkspace(null)

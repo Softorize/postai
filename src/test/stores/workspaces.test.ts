@@ -29,7 +29,6 @@ vi.mock('@/stores/tabs.store', () => ({
 
 import { api } from '@/api/client'
 import { useWorkspacesStore } from '@/stores/workspaces.store'
-import { useTabsStore } from '@/stores/tabs.store'
 import { Workspace } from '@/types'
 
 const createMockWorkspace = (overrides: Partial<Workspace> = {}): Workspace => ({
