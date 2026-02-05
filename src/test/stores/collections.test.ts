@@ -5,6 +5,7 @@ vi.mock('@/api/client', () => ({
   api: {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
   }
@@ -268,6 +269,235 @@ describe('Collections Store', () => {
 
         expect(result.success).toBe(false)
         expect(result.error).toBe('Export failed')
+      })
+    })
+  })
+
+  describe('CRUD operations', () => {
+    const createMockCollection = (overrides = {}) => ({
+      id: 'col-1',
+      name: 'Test Collection',
+      description: '',
+      schema_version: '1.0',
+      variables: [],
+      pre_request_script: '',
+      test_script: '',
+      folders: [],
+      requests: [],
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+      ...overrides,
+    })
+
+    describe('fetchCollections', () => {
+      it('should fetch collections with workspace param', async () => {
+        const collections = [createMockCollection()]
+        vi.mocked(api.get).mockResolvedValue({ data: collections })
+
+        await useCollectionsStore.getState().fetchCollections()
+
+        expect(api.get).toHaveBeenCalledWith('/collections/', {
+          params: { workspace: 'workspace-1' }
+        })
+        expect(useCollectionsStore.getState().collections).toEqual(collections)
+        expect(useCollectionsStore.getState().isLoading).toBe(false)
+      })
+
+      it('should set error on failure', async () => {
+        vi.mocked(api.get).mockRejectedValue(new Error('Network error'))
+
+        await useCollectionsStore.getState().fetchCollections()
+
+        expect(useCollectionsStore.getState().error).toBe('Network error')
+        expect(useCollectionsStore.getState().isLoading).toBe(false)
+      })
+    })
+
+    describe('createCollection', () => {
+      it('should create and add to state', async () => {
+        const newCol = createMockCollection({ id: 'col-new', name: 'New' })
+        vi.mocked(api.post).mockResolvedValue({ data: newCol })
+
+        const result = await useCollectionsStore.getState().createCollection('New', 'desc')
+
+        expect(api.post).toHaveBeenCalledWith('/collections/', { name: 'New', description: 'desc' })
+        expect(result).toEqual(newCol)
+        expect(useCollectionsStore.getState().collections).toContainEqual(newCol)
+      })
+    })
+
+    describe('updateCollection', () => {
+      it('should update collection in state', async () => {
+        const col = createMockCollection({ id: 'col-1', name: 'Old' })
+        useCollectionsStore.setState({ collections: [col] })
+        vi.mocked(api.put).mockResolvedValue({ data: { ...col, name: 'Updated' } })
+
+        await useCollectionsStore.getState().updateCollection('col-1', { name: 'Updated' })
+
+        expect(useCollectionsStore.getState().collections[0].name).toBe('Updated')
+      })
+
+      it('should sync selectedCollection if it matches', async () => {
+        const col = createMockCollection({ id: 'col-1' })
+        useCollectionsStore.setState({ collections: [col], selectedCollection: col as any })
+        vi.mocked(api.put).mockResolvedValue({ data: { ...col, name: 'Updated' } })
+
+        await useCollectionsStore.getState().updateCollection('col-1', { name: 'Updated' })
+
+        expect(useCollectionsStore.getState().selectedCollection?.name).toBe('Updated')
+      })
+    })
+
+    describe('deleteCollection', () => {
+      it('should remove collection from state', async () => {
+        const col = createMockCollection({ id: 'col-1' })
+        useCollectionsStore.setState({ collections: [col] })
+        vi.mocked(api.delete).mockResolvedValue({})
+
+        await useCollectionsStore.getState().deleteCollection('col-1')
+
+        expect(useCollectionsStore.getState().collections).toHaveLength(0)
+      })
+
+      it('should clear selectedCollection if deleted', async () => {
+        const col = createMockCollection({ id: 'col-1' })
+        useCollectionsStore.setState({ collections: [col], selectedCollection: col as any })
+        vi.mocked(api.delete).mockResolvedValue({})
+
+        await useCollectionsStore.getState().deleteCollection('col-1')
+
+        expect(useCollectionsStore.getState().selectedCollection).toBeNull()
+      })
+    })
+
+    describe('selectCollection/selectRequest', () => {
+      it('should set selectedCollection', () => {
+        const col = createMockCollection() as any
+        useCollectionsStore.getState().selectCollection(col)
+        expect(useCollectionsStore.getState().selectedCollection).toEqual(col)
+      })
+
+      it('should clear selectedCollection with null', () => {
+        useCollectionsStore.getState().selectCollection(null)
+        expect(useCollectionsStore.getState().selectedCollection).toBeNull()
+      })
+
+      it('should set selectedRequest', () => {
+        const req = { id: 'req-1', name: 'Test' } as any
+        useCollectionsStore.getState().selectRequest(req)
+        expect(useCollectionsStore.getState().selectedRequest).toEqual(req)
+      })
+    })
+
+    describe('Folder operations', () => {
+      it('createFolder should call API and refresh', async () => {
+        const folder = { id: 'folder-1', name: 'New Folder' }
+        vi.mocked(api.post).mockResolvedValue({ data: folder })
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        const result = await useCollectionsStore.getState().createFolder('col-1', 'New Folder')
+
+        expect(api.post).toHaveBeenCalledWith('/collections/col-1/folders/', {
+          name: 'New Folder',
+          parent: undefined,
+        })
+        expect(result).toEqual(folder)
+      })
+
+      it('createFolder with parent', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: { id: 'f-1' } })
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useCollectionsStore.getState().createFolder('col-1', 'Sub', 'parent-1')
+
+        expect(api.post).toHaveBeenCalledWith('/collections/col-1/folders/', {
+          name: 'Sub',
+          parent: 'parent-1',
+        })
+      })
+
+      it('updateFolder should call API and refresh', async () => {
+        vi.mocked(api.put).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useCollectionsStore.getState().updateFolder('col-1', 'folder-1', { name: 'Updated' })
+
+        expect(api.put).toHaveBeenCalledWith('/collections/col-1/folders/folder-1/', { name: 'Updated' })
+      })
+
+      it('deleteFolder should call API and refresh', async () => {
+        vi.mocked(api.delete).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useCollectionsStore.getState().deleteFolder('col-1', 'folder-1')
+
+        expect(api.delete).toHaveBeenCalledWith('/collections/col-1/folders/folder-1/')
+      })
+    })
+
+    describe('Request operations', () => {
+      it('createRequest should call API and refresh', async () => {
+        const req = { id: 'req-1', name: 'New Request' }
+        vi.mocked(api.post).mockResolvedValue({ data: req })
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        const result = await useCollectionsStore.getState().createRequest('col-1', { name: 'New Request' })
+
+        expect(api.post).toHaveBeenCalledWith('/collections/col-1/requests/', { name: 'New Request' })
+        expect(result).toEqual(req)
+      })
+
+      it('updateRequest should call API and sync selectedRequest', async () => {
+        const req = { id: 'req-1', name: 'Old' } as any
+        useCollectionsStore.setState({ selectedRequest: req })
+        vi.mocked(api.put).mockResolvedValue({ data: { ...req, name: 'Updated' } })
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useCollectionsStore.getState().updateRequest('col-1', 'req-1', { name: 'Updated' })
+
+        expect(api.put).toHaveBeenCalledWith('/collections/col-1/requests/req-1/', { name: 'Updated' })
+        expect(useCollectionsStore.getState().selectedRequest?.name).toBe('Updated')
+      })
+
+      it('deleteRequest should call API and clear selectedRequest', async () => {
+        const req = { id: 'req-1' } as any
+        useCollectionsStore.setState({ selectedRequest: req })
+        vi.mocked(api.delete).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useCollectionsStore.getState().deleteRequest('col-1', 'req-1')
+
+        expect(api.delete).toHaveBeenCalledWith('/collections/col-1/requests/req-1/')
+        expect(useCollectionsStore.getState().selectedRequest).toBeNull()
+      })
+    })
+
+    describe('UI State', () => {
+      it('toggleExpanded should toggle id in expandedIds', () => {
+        useCollectionsStore.getState().toggleExpanded('col-1')
+        expect(useCollectionsStore.getState().expandedIds.has('col-1')).toBe(true)
+
+        useCollectionsStore.getState().toggleExpanded('col-1')
+        expect(useCollectionsStore.getState().expandedIds.has('col-1')).toBe(false)
+      })
+
+      it('setExpanded should add or remove from expandedIds', () => {
+        useCollectionsStore.getState().setExpanded('col-1', true)
+        expect(useCollectionsStore.getState().expandedIds.has('col-1')).toBe(true)
+
+        useCollectionsStore.getState().setExpanded('col-1', false)
+        expect(useCollectionsStore.getState().expandedIds.has('col-1')).toBe(false)
+      })
+
+      it('setSidebarTab should update tab', () => {
+        useCollectionsStore.getState().setSidebarTab('history')
+        expect(useCollectionsStore.getState().sidebarActiveTab).toBe('history')
+      })
+
+      it('clearHighlight should clear highlightedRequestId', () => {
+        useCollectionsStore.setState({ highlightedRequestId: 'req-1' })
+        useCollectionsStore.getState().clearHighlight()
+        expect(useCollectionsStore.getState().highlightedRequestId).toBeNull()
       })
     })
   })

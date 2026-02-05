@@ -6,6 +6,7 @@ vi.mock('@/api/client', () => ({
   api: {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
   }
@@ -527,6 +528,256 @@ describe('Environments Store', () => {
         const result = await useEnvironmentsStore.getState().fetchGlobalEnvironments()
 
         expect(result).toEqual([])
+      })
+    })
+
+    describe('importEnvironment', () => {
+      it('should return success result with env data', async () => {
+        const importedEnv = createMockEnv({ id: 'imported-1', name: 'Imported' })
+        vi.mocked(api.post).mockResolvedValue({
+          data: { success: true, environment: importedEnv, variables_imported: 3 }
+        })
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        const result = await useEnvironmentsStore.getState().importEnvironment('{"env": "data"}')
+
+        expect(api.post).toHaveBeenCalledWith('/environments/import/', { content: '{"env": "data"}' })
+        expect(result.success).toBe(true)
+        expect(result.environment).toEqual(importedEnv)
+        expect(result.variables_imported).toBe(3)
+      })
+
+      it('should return failure when API returns success: false', async () => {
+        vi.mocked(api.post).mockResolvedValue({
+          data: { success: false, error: 'Invalid format' }
+        })
+
+        const result = await useEnvironmentsStore.getState().importEnvironment('bad data')
+
+        expect(result.success).toBe(false)
+        expect(result.error).toBe('Invalid format')
+      })
+
+      it('should return failure on network error', async () => {
+        vi.mocked(api.post).mockRejectedValue(new Error('Network error'))
+
+        const result = await useEnvironmentsStore.getState().importEnvironment('data')
+
+        expect(result.success).toBe(false)
+        expect(result.error).toBe('Network error')
+      })
+    })
+
+    describe('exportEnvironment', () => {
+      beforeEach(() => {
+        vi.spyOn(document, 'createElement').mockReturnValue({
+          href: '',
+          download: '',
+          click: vi.fn(),
+        } as any)
+        vi.spyOn(document.body, 'appendChild').mockImplementation(vi.fn() as any)
+        vi.spyOn(document.body, 'removeChild').mockImplementation(vi.fn() as any)
+        vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+      })
+
+      it('should export environment successfully', async () => {
+        const env = createMockEnv({ id: 'env-1', name: 'My Env' })
+        useEnvironmentsStore.setState({ environments: [env] })
+        vi.mocked(api.get).mockResolvedValue({ data: { name: 'My Env' } })
+
+        const result = await useEnvironmentsStore.getState().exportEnvironment('env-1')
+
+        expect(api.get).toHaveBeenCalledWith('/environments/env-1/export/', {
+          params: { export_format: 'postman' }
+        })
+        expect(result.success).toBe(true)
+      })
+
+      it('should export in postai format', async () => {
+        useEnvironmentsStore.setState({ environments: [createMockEnv()] })
+        vi.mocked(api.get).mockResolvedValue({ data: {} })
+
+        await useEnvironmentsStore.getState().exportEnvironment('env-1', 'postai')
+
+        expect(api.get).toHaveBeenCalledWith('/environments/env-1/export/', {
+          params: { export_format: 'postai' }
+        })
+      })
+
+      it('should return failure on error', async () => {
+        vi.mocked(api.get).mockRejectedValue(new Error('Export failed'))
+
+        const result = await useEnvironmentsStore.getState().exportEnvironment('env-1')
+
+        expect(result.success).toBe(false)
+        expect(result.error).toBe('Export failed')
+      })
+
+      it('should handle axios error with response status', async () => {
+        vi.mocked(api.get).mockRejectedValue({
+          response: { status: 404 },
+          message: 'Not Found',
+        })
+
+        const result = await useEnvironmentsStore.getState().exportEnvironment('env-1')
+
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('404')
+      })
+    })
+
+    describe('Variable actions', () => {
+      it('createVariable should call API and refresh', async () => {
+        const mockVar = createMockVariable({ id: 'new-var', key: 'new_key' })
+        vi.mocked(api.post).mockResolvedValue({ data: mockVar })
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        const result = await useEnvironmentsStore.getState().createVariable('env-1', { key: 'new_key' })
+
+        expect(api.post).toHaveBeenCalledWith('/environments/env-1/variables/', { key: 'new_key' })
+        expect(result).toEqual(mockVar)
+      })
+
+      it('updateVariable should call API and refresh', async () => {
+        vi.mocked(api.patch).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useEnvironmentsStore.getState().updateVariable('env-1', 'var-1', { key: 'updated' })
+
+        expect(api.patch).toHaveBeenCalledWith('/environments/env-1/variables/var-1/', { key: 'updated' })
+      })
+
+      it('deleteVariable should call API and refresh', async () => {
+        vi.mocked(api.delete).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useEnvironmentsStore.getState().deleteVariable('env-1', 'var-1')
+
+        expect(api.delete).toHaveBeenCalledWith('/environments/env-1/variables/var-1/')
+      })
+
+      it('selectVariableValue should call API and refresh', async () => {
+        vi.mocked(api.post).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useEnvironmentsStore.getState().selectVariableValue('env-1', 'var-1', 2)
+
+        expect(api.post).toHaveBeenCalledWith('/environments/env-1/variables/var-1/select-value/', { index: 2 })
+      })
+
+      it('addVariableValue should call API and refresh', async () => {
+        vi.mocked(api.post).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useEnvironmentsStore.getState().addVariableValue('env-1', 'var-1', 'new-value')
+
+        expect(api.post).toHaveBeenCalledWith('/environments/env-1/variables/var-1/add-value/', { value: 'new-value' })
+      })
+
+      it('removeVariableValue should call API and refresh', async () => {
+        vi.mocked(api.post).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useEnvironmentsStore.getState().removeVariableValue('env-1', 'var-1', 1)
+
+        expect(api.post).toHaveBeenCalledWith('/environments/env-1/variables/var-1/remove-value/', { index: 1 })
+      })
+
+      it('reorderVariables should call API and refresh', async () => {
+        vi.mocked(api.post).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useEnvironmentsStore.getState().reorderVariables('env-1', ['var-2', 'var-1', 'var-3'])
+
+        expect(api.post).toHaveBeenCalledWith('/environments/env-1/variables/reorder/', {
+          variable_ids: ['var-2', 'var-1', 'var-3']
+        })
+      })
+    })
+
+    describe('Environment CRUD', () => {
+      it('fetchEnvironments should fetch and set active', async () => {
+        const envs = [
+          createMockEnv({ id: 'env-1', is_active: false }),
+          createMockEnv({ id: 'env-2', is_active: true }),
+        ]
+        vi.mocked(api.get).mockResolvedValue({ data: envs })
+
+        await useEnvironmentsStore.getState().fetchEnvironments()
+
+        expect(useEnvironmentsStore.getState().environments).toEqual(envs)
+        expect(useEnvironmentsStore.getState().activeEnvironment!.id).toBe('env-2')
+      })
+
+      it('fetchEnvironments should not set collection env as active', async () => {
+        const envs = [
+          createMockEnv({ id: 'env-1', is_active: true, collection: 'col-1' }),
+        ]
+        vi.mocked(api.get).mockResolvedValue({ data: envs })
+
+        await useEnvironmentsStore.getState().fetchEnvironments()
+
+        expect(useEnvironmentsStore.getState().activeEnvironment).toBeNull()
+      })
+
+      it('updateEnvironment should update in state', async () => {
+        const env = createMockEnv({ id: 'env-1', name: 'Old' })
+        const updated = { ...env, name: 'Updated' }
+        useEnvironmentsStore.setState({ environments: [env] })
+        vi.mocked(api.put).mockResolvedValue({ data: updated })
+
+        await useEnvironmentsStore.getState().updateEnvironment('env-1', { name: 'Updated' })
+
+        expect(useEnvironmentsStore.getState().environments[0].name).toBe('Updated')
+      })
+
+      it('updateEnvironment should sync activeEnvironment', async () => {
+        const env = createMockEnv({ id: 'env-1' })
+        const updated = { ...env, name: 'Updated' }
+        useEnvironmentsStore.setState({ environments: [env], activeEnvironment: env })
+        vi.mocked(api.put).mockResolvedValue({ data: updated })
+
+        await useEnvironmentsStore.getState().updateEnvironment('env-1', { name: 'Updated' })
+
+        expect(useEnvironmentsStore.getState().activeEnvironment!.name).toBe('Updated')
+      })
+
+      it('deleteEnvironment should remove and clear active', async () => {
+        const env = createMockEnv({ id: 'env-1' })
+        useEnvironmentsStore.setState({ environments: [env], activeEnvironment: env })
+        vi.mocked(api.delete).mockResolvedValue({})
+
+        await useEnvironmentsStore.getState().deleteEnvironment('env-1')
+
+        expect(useEnvironmentsStore.getState().environments).toHaveLength(0)
+        expect(useEnvironmentsStore.getState().activeEnvironment).toBeNull()
+      })
+
+      it('activateEnvironment should call API and refresh', async () => {
+        vi.mocked(api.post).mockResolvedValue({})
+        vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+        await useEnvironmentsStore.getState().activateEnvironment('env-1')
+
+        expect(api.post).toHaveBeenCalledWith('/environments/env-1/activate/')
+      })
+
+      it('getActiveEnvironment should return active from API', async () => {
+        const env = createMockEnv({ id: 'env-1', is_active: true })
+        vi.mocked(api.get).mockResolvedValue({ data: env })
+
+        const result = await useEnvironmentsStore.getState().getActiveEnvironment()
+
+        expect(result).toEqual(env)
+      })
+
+      it('getActiveEnvironment should return null on error', async () => {
+        vi.mocked(api.get).mockRejectedValue(new Error('error'))
+
+        const result = await useEnvironmentsStore.getState().getActiveEnvironment()
+
+        expect(result).toBeNull()
       })
     })
 
