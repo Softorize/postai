@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { clsx } from 'clsx'
 import { RequestBody } from '@/types'
 import { KeyValueEditor } from './KeyValueEditor'
@@ -182,6 +182,15 @@ export function BodyEditor({ body, onChange }: BodyEditorProps) {
   const [mode, setMode] = useState<BodyMode>((body.mode as BodyMode) || 'none')
   const [popoverVariable, setPopoverVariable] = useState<string | null>(null)
   const [popoverRect, setPopoverRect] = useState<DOMRect | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const overlayRef = useRef<HTMLPreElement>(null)
+
+  const handleScroll = () => {
+    if (textareaRef.current && overlayRef.current) {
+      overlayRef.current.scrollTop = textareaRef.current.scrollTop
+      overlayRef.current.scrollLeft = textareaRef.current.scrollLeft
+    }
+  }
 
   const handleVariableClick = (varName: string, rect: DOMRect) => {
     setPopoverVariable(varName)
@@ -263,21 +272,27 @@ export function BodyEditor({ body, onChange }: BodyEditorProps) {
       {mode === 'raw' && (
         <div className="relative">
           <textarea
+            ref={textareaRef}
             value={body.raw || ''}
             onChange={(e) => onChange({ ...body, raw: e.target.value })}
+            onScroll={handleScroll}
             placeholder={
               body.language === 'json'
                 ? '{\n  "key": "value"\n}'
                 : 'Enter request body...'
             }
+            wrap="off"
             className={clsx(
-              'w-full h-64 px-4 py-3 bg-sidebar border border-border rounded-lg text-sm font-mono resize-none focus:border-primary-500',
+              'w-full h-64 px-4 py-3 bg-sidebar border border-border rounded-lg text-sm font-mono resize-none focus:border-primary-500 leading-[1.5] overflow-auto',
               body.language === 'json' && body.raw ? 'json-editor-textarea' : ''
             )}
           />
           {/* Syntax highlighted overlay for JSON - variables are clickable */}
           {body.language === 'json' && body.raw && (
-            <pre className="absolute inset-0 px-4 py-3 bg-transparent border border-transparent rounded-lg text-sm font-mono overflow-hidden pointer-events-none whitespace-pre-wrap break-all">
+            <pre
+              ref={overlayRef}
+              className="absolute inset-0 px-4 py-3 bg-transparent border border-transparent rounded-lg text-sm font-mono overflow-hidden pointer-events-none whitespace-pre leading-[1.5]"
+            >
               {highlightJson(body.raw, handleVariableClick)}
             </pre>
           )}
