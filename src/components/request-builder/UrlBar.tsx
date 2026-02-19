@@ -137,7 +137,7 @@ export function UrlBar({
           key={`var-${match.index}`}
           onClick={(e) => handleVariableClick(varName, e)}
           className={clsx(
-            'rounded px-0.5 mx-px cursor-pointer transition-all pointer-events-auto',
+            'rounded cursor-pointer transition-all pointer-events-auto',
             'hover:ring-2 hover:ring-primary-500/50',
             exists
               ? 'bg-green-500/30 text-green-400 hover:bg-green-500/40'
@@ -198,7 +198,7 @@ export function UrlBar({
             ref={overlayRef}
             className={clsx(
               'absolute pointer-events-none overflow-x-auto overflow-y-hidden',
-              'text-sm font-mono whitespace-nowrap scrollbar-none'
+              'text-sm font-mono whitespace-nowrap scrollbar-none editor-text-normalize'
             )}
             style={{
               // Match input padding + border (1px border)
@@ -225,7 +225,7 @@ export function UrlBar({
           placeholder="Enter request URL (e.g., https://api.example.com/users)"
           className={clsx(
             'w-full px-4 py-2 bg-sidebar border border-border rounded-lg text-sm',
-            'focus:border-primary-500 focus:ring-1 focus:ring-primary-500 font-mono',
+            'focus:border-primary-500 focus:ring-1 focus:ring-primary-500 font-mono editor-text-normalize',
             hasVariables && 'variable-overlay-input'
           )}
           style={hasVariables ? undefined : { color: '#cccccc', WebkitTextFillColor: '#cccccc' }}

@@ -86,7 +86,7 @@ export function VariableInput({
           key={`var-${match.index}`}
           onClick={interactive ? (e) => handleVariableClick(varName, e) : undefined}
           className={clsx(
-            'rounded px-0.5 mx-px transition-all',
+            'rounded transition-all',
             interactive && 'cursor-pointer pointer-events-auto hover:ring-2 hover:ring-primary-500/50',
             exists
               ? 'bg-green-500/30 text-green-400 hover:bg-green-500/40'
@@ -122,7 +122,7 @@ export function VariableInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={clsx(
-          'w-full px-3 py-2 text-sm font-mono bg-transparent',
+          'w-full px-3 py-2 text-sm font-mono bg-transparent editor-text-normalize',
           'border border-border rounded',
           'focus:border-primary-500 focus:outline-none',
           // Make text transparent when there are variables, so highlight shows through
@@ -136,7 +136,7 @@ export function VariableInput({
         <div
           className={clsx(
             'absolute inset-0 px-3 py-2 pointer-events-none whitespace-pre overflow-hidden',
-            'text-sm font-mono text-text-primary'
+            'text-sm font-mono text-text-primary editor-text-normalize'
           )}
         >
           {renderHighlightedText(true)}
@@ -232,7 +232,7 @@ export function VariableTextarea({
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
         className={clsx(
-          'w-full px-3 py-2 text-sm font-mono bg-transparent',
+          'w-full px-3 py-2 text-sm font-mono bg-transparent editor-text-normalize',
           'border border-border rounded',
           'focus:border-primary-500 focus:outline-none',
           'resize-none',
@@ -244,7 +244,7 @@ export function VariableTextarea({
       <div
         className={clsx(
           'absolute inset-0 px-3 py-2 pointer-events-none whitespace-pre-wrap overflow-hidden',
-          'text-sm font-mono text-text-primary'
+          'text-sm font-mono text-text-primary editor-text-normalize'
         )}
       >
         {value ? renderHighlightedText() : (

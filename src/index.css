@@ -163,6 +163,15 @@ button:disabled {
   border-radius: 4px;
 }
 
+/* Normalize text rendering for overlay editors to prevent cursor offset */
+.editor-text-normalize {
+  font-kerning: none;
+  text-rendering: geometricPrecision;
+  letter-spacing: 0;
+  word-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
 /* JSON body editor with syntax highlighting */
 .json-editor-textarea {
   color: transparent;

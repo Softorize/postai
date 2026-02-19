@@ -180,7 +180,7 @@ export function ScriptEditor({ value, onChange, type }: ScriptEditorProps) {
               ? '// Pre-request script runs before the request\n// Use pm.environment.set() to set variables\n// Use pm.request.headers.add() to modify headers'
               : '// Test script runs after response\n// Use pm.test() to create tests\n// Use pm.expect() for assertions'
             }
-            className="script-editor-textarea absolute inset-0 w-full h-full px-4 py-3 bg-sidebar font-mono text-sm resize-none focus:outline-none focus:ring-0 border-none"
+            className="script-editor-textarea absolute inset-0 w-full h-full px-4 py-3 bg-sidebar font-mono text-sm resize-none focus:outline-none focus:ring-0 border-none editor-text-normalize"
             spellCheck={false}
             style={{
               tabSize: 2,
@@ -201,7 +201,7 @@ export function ScriptEditor({ value, onChange, type }: ScriptEditorProps) {
             }}
           />
           {/* Syntax highlighted overlay */}
-          <pre className="absolute inset-0 px-4 py-3 bg-transparent font-mono text-sm overflow-auto pointer-events-none whitespace-pre-wrap break-words">
+          <pre className="absolute inset-0 px-4 py-3 bg-transparent font-mono text-sm overflow-auto pointer-events-none whitespace-pre-wrap break-words editor-text-normalize">
             {value ? highlightJS(value) : (
               <span className="text-text-secondary">
                 {type === 'pre-request'

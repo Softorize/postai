@@ -33,7 +33,7 @@ function highlightEnvVars(
     tokens.push(
       <span
         key={keyIndex.current++}
-        className="text-orange-400 bg-orange-400/10 rounded px-0.5 cursor-pointer hover:bg-orange-400/20 pointer-events-auto"
+        className="text-orange-400 bg-orange-400/10 rounded cursor-pointer hover:bg-orange-400/20 pointer-events-auto"
         onClick={(e) => {
           e.stopPropagation()
           if (onVariableClick) {
@@ -283,7 +283,7 @@ export function BodyEditor({ body, onChange }: BodyEditorProps) {
             }
             wrap="off"
             className={clsx(
-              'w-full h-64 px-4 py-3 bg-sidebar border border-border rounded-lg text-sm font-mono resize-none focus:border-primary-500 leading-[1.5] overflow-auto',
+              'w-full h-64 px-4 py-3 bg-sidebar border border-border rounded-lg text-sm font-mono resize-none focus:border-primary-500 leading-[1.5] overflow-auto editor-text-normalize',
               body.language === 'json' && body.raw ? 'json-editor-textarea' : ''
             )}
           />
@@ -291,7 +291,7 @@ export function BodyEditor({ body, onChange }: BodyEditorProps) {
           {body.language === 'json' && body.raw && (
             <pre
               ref={overlayRef}
-              className="absolute inset-0 px-4 py-3 bg-transparent border border-transparent rounded-lg text-sm font-mono overflow-hidden pointer-events-none whitespace-pre leading-[1.5]"
+              className="absolute inset-0 px-4 py-3 bg-transparent border border-transparent rounded-lg text-sm font-mono overflow-hidden pointer-events-none whitespace-pre leading-[1.5] editor-text-normalize"
             >
               {highlightJson(body.raw, handleVariableClick)}
             </pre>
