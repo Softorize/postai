@@ -150,22 +150,21 @@ export function AuthEditor({ auth, onChange }: AuthEditorProps) {
         <div>
           <label className="block text-sm text-text-secondary mb-2">Token</label>
           <div className="relative">
-            <input
-              type={showToken ? 'text' : 'password'}
+            <VariableInput
               value={auth?.bearer?.token || ''}
-              onChange={(e) =>
+              onChange={(value) =>
                 onChange({
                   type: 'bearer',
-                  bearer: { token: e.target.value },
+                  bearer: { token: value },
                 })
               }
-              placeholder="Enter bearer token"
-              className="w-full px-4 py-2 pr-10 bg-sidebar border border-border rounded-lg text-sm font-mono focus:border-primary-500"
+              placeholder="Enter bearer token or {{variable}}"
+              className="bg-sidebar pr-10"
             />
             <button
               type="button"
               onClick={() => setShowToken(!showToken)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded z-10"
             >
               {showToken ? (
                 <EyeOff className="w-4 h-4 text-text-secondary" />
